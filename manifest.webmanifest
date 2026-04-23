@@ -1,0 +1,49 @@
+{
+  "name": "Otimizador de Racks - Arechaederra",
+  "short_name": "Racks PWA",
+  "description": "Conversor de Ordens de Trabalho e Otimizador de armazenamento de madeiras em racks",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f0f4f8",
+  "theme_color": "#1d4ed8",
+  "lang": "pt-PT",
+  "categories": ["productivity", "business", "utilities"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Conversor de OT",
+      "short_name": "Conversor",
+      "description": "Converter OT em PDF para formato do otimizador",
+      "url": "./converter.html",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Otimizador de Racks",
+      "short_name": "Otimizador",
+      "description": "Calcular distribuição ideal de peças em racks",
+      "url": "./optimizer.html",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

@@ -1,0 +1,2126 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#1d4ed8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Racks">
+    <title>Otimizador de Racks Metálicos</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f0f4f8;
+            min-height: 100vh;
+            padding: 20px 15px;
+            position: relative;
+            overflow-x: hidden;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(59, 130, 246, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(29, 78, 216, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 40% 20%, rgba(96, 165, 250, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        .container { 
+            max-width: 1400px; 
+            margin: 0 auto; 
+            position: relative;
+            z-index: 1;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 25px;
+            animation: fadeInDown 0.8s ease-out;
+        }
+        
+        .header h1 {
+            font-size: 2.2em;
+            font-weight: 800;
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 50%, #60a5fa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 5px;
+            letter-spacing: -1px;
+        }
+        
+        .header p {
+            color: #475569;
+            font-size: 0.95em;
+            font-weight: 500;
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
+            animation: fadeInUp 0.8s ease-out;
+        }
+        
+        .glass-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.12);
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+        
+        .section-title {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 28px;
+            background: linear-gradient(180deg, #3b82f6, #1d4ed8);
+            border-radius: 2px;
+        }
+        
+        .project-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .input-group {
+            position: relative;
+        }
+        
+        .input-group label {
+            display: block;
+            color: #475569;
+            font-size: 0.75em;
+            font-weight: 600;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .input-group input {
+            width: 100%;
+            padding: 10px 15px;
+            background: #ffffff;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            color: #1e293b;
+            font-size: 0.9em;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .input-group input:focus {
+            outline: none;
+            background: #ffffff;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+        }
+        
+        .upload-zone {
+            margin-top: 15px;
+            padding: 20px;
+            border: 2px dashed #cbd5e1;
+            border-radius: 12px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            background: #f8fafc;
+        }
+        
+        .upload-zone::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.1), transparent);
+            transition: left 0.5s ease;
+        }
+        
+        .upload-zone:hover {
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.05);
+        }
+        
+        .upload-zone:hover::before {
+            left: 100%;
+        }
+        
+        .upload-icon {
+            font-size: 2em;
+            margin-bottom: 8px;
+            filter: drop-shadow(0 0 15px rgba(59, 130, 246, 0.5));
+        }
+        
+        .upload-text {
+            color: #1e293b;
+            font-size: 0.95em;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .upload-hint {
+            color: #64748b;
+            font-size: 0.75em;
+        }
+        
+        .file-input-wrapper input[type=file] { 
+            position: absolute; 
+            left: -9999px; 
+        }
+        
+        .success-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #0ea5e9, #0284c7);
+            color: white;
+            border-radius: 50px;
+            font-weight: 600;
+            margin-top: 20px;
+            box-shadow: 0 10px 30px rgba(14, 165, 233, 0.3);
+            animation: bounceIn 0.6s ease-out;
+        }
+        
+        .filter-bar {
+            display: grid;
+            grid-template-columns: 2fr 1fr auto;
+            gap: 15px;
+            margin-bottom: 25px;
+            align-items: end;
+        }
+        
+        .filter-group {
+            background: #f8fafc;
+            padding: 15px 20px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .multiplier-control {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .multiplier-control select,
+        .multiplier-control input {
+            background: #ffffff;
+            border: 2px solid #cbd5e1;
+            color: #1e293b;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+        
+        .multiplier-control select:focus,
+        .multiplier-control input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        
+        .btn {
+            padding: 8px 18px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 0.8em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #0ea5e9, #0284c7);
+            color: white;
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #1e40af, #1e3a8a);
+            color: white;
+        }
+        
+        .btn-success:disabled {
+            background: #374151;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .table-wrapper {
+            background: #ffffff;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .product-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .product-table th {
+            background: rgba(74, 144, 226, 0.1);
+            color: #1e293b;
+            padding: 10px;
+            text-align: left;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.75em;
+            letter-spacing: 0.5px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .product-table td {
+            padding: 10px;
+            color: #475569;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 0.85em;
+        }
+        
+        .product-table tr {
+            transition: all 0.2s ease;
+        }
+        
+        .product-table tr:hover {
+            background: #f8fafc;
+        }
+        
+        .product-table input[type="checkbox"] {
+            width: 22px;
+            height: 22px;
+            cursor: pointer;
+            accent-color: #3b82f6;
+        }
+        
+        .category-badge {
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .category-tabuleiro { 
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+        }
+        
+        .category-tabua { 
+            background: linear-gradient(135deg, #0ea5e9, #0284c7);
+            color: white;
+        }
+        
+        .category-barrote { 
+            background: linear-gradient(135deg, #06b6d4, #0891b2);
+            color: white;
+        }
+        
+        .optimize-btn {
+            display: block;
+            margin: 25px auto;
+            padding: 15px 45px;
+            font-size: 1.1em;
+            background: linear-gradient(135deg, #0ea5e9, #0284c7);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 6px 25px rgba(14, 165, 233, 0.3);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .optimize-btn:hover:not(:disabled) {
+            transform: translateY(-2px) scale(1.03);
+            box-shadow: 0 10px 35px rgba(14, 165, 233, 0.4);
+        }
+        
+        .optimize-btn:disabled {
+            background: #374151;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .selected-count {
+            text-align: center;
+            font-size: 1.2em;
+            color: #4A90E2;
+            font-weight: 700;
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(74, 144, 226, 0.1);
+            border-radius: 12px;
+            border: 1px solid rgba(74, 144, 226, 0.3);
+        }
+        
+        .rack-card {
+            background: rgba(255, 255, 255, 0.95);
+            border: 2px solid rgba(74, 144, 226, 0.3);
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 25px;
+            transition: all 0.3s ease;
+        }
+        
+        .rack-card:hover {
+            border-color: rgba(74, 144, 226, 0.6);
+            box-shadow: 0 0 30px rgba(74, 144, 226, 0.15);
+        }
+        
+        .rack-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        
+        .rack-title {
+            font-size: 1.5em;
+            font-weight: 800;
+            color: #1e293b;
+        }
+        
+        .rack-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-box {
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+            text-align: center;
+        }
+        
+        .stat-label {
+            color: #64748b;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+        
+        .stat-value {
+            color: #1e293b;
+            font-size: 1.4em;
+            font-weight: 800;
+        }
+        
+        .rack-3d-container {
+            width: 100%;
+            height: 450px;
+            background: #1e293b;
+            border-radius: 12px;
+            margin: 20px 0;
+            position: relative;
+            overflow: hidden;
+            border: 2px solid #cbd5e1;
+            box-shadow: 0 6px 25px rgba(0, 0, 0, 0.08);
+        }
+        
+        .controls-3d {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(74, 144, 226, 0.5);
+            z-index: 10;
+            color: white;
+        }
+        
+        .controls-title {
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: #4A90E2;
+            font-size: 0.9em;
+        }
+        
+        .control-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 6px 0;
+            font-size: 0.8em;
+        }
+        
+        .detail-table {
+            width: 100%;
+            background: #ffffff;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 20px;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .detail-table th {
+            background: rgba(74, 144, 226, 0.1);
+            color: #1e293b;
+            padding: 10px;
+            text-align: center;
+            font-weight: 700;
+            font-size: 0.75em;
+            text-transform: uppercase;
+        }
+        
+        .detail-table td {
+            padding: 8px;
+            text-align: center;
+            color: #475569;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 0.85em;
+        }
+        
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+        
+        .total-racks {
+            font-size: 2em;
+            font-weight: 800;
+            background: linear-gradient(135deg, #4A90E2, #00008B);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .selected-count {
+            text-align: center;
+            font-size: 1em;
+            color: #4A90E2;
+            font-weight: 700;
+            margin-top: 15px;
+            padding: 12px;
+            background: rgba(74, 144, 226, 0.1);
+            border-radius: 10px;
+            border: 1px solid rgba(74, 144, 226, 0.3);
+        }
+        
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes bounceIn {
+            0% {
+                opacity: 0;
+                transform: scale(0.3);
+            }
+            50% {
+                opacity: 1;
+                transform: scale(1.05);
+            }
+            70% { transform: scale(0.9); }
+            100% { transform: scale(1); }
+        }
+        
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: rgba(59, 130, 246, 0.5);
+            border-radius: 5px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(59, 130, 246, 0.8);
+        }
+    
+.pwa-home-btn {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    z-index: 200;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: #1e40af;
+    padding: 8px 14px;
+    border-radius: 10px;
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-weight: 700;
+    font-size: 0.85em;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    transition: all 0.2s;
+}
+.pwa-home-btn:hover {
+    background: white;
+    box-shadow: 0 6px 20px rgba(29, 78, 216, 0.2);
+    transform: translateY(-1px);
+}
+@media (max-width: 600px) {
+    .pwa-home-btn { top: 10px; left: 10px; padding: 6px 10px; font-size: 0.8em; }
+}
+</style>
+</head>
+<body>
+<a href="index.html" class="pwa-home-btn" title="Voltar ao menu">← Menu</a>
+    <div class="container">
+        <div class="header">
+            <h1>🗂️ Otimizador de Racks</h1>
+            <p>Sistema Inteligente de Organização de Material</p>
+        </div>
+        
+        <div class="glass-card">
+            <h2 class="section-title">Informações do Projeto</h2>
+            
+            <div class="project-info-grid">
+                <div class="input-group">
+                    <label>Nome do Projeto</label>
+                    <input type="text" id="projectName" placeholder="Armazém Central">
+                </div>
+                <div class="input-group">
+                    <label>Data</label>
+                    <input type="date" id="projectDate">
+                </div>
+                <div class="input-group" style="display:none;">
+                    <label>Ordem de Trabalho</label>
+                    <input type="text" id="projectOT" placeholder="OT-2025-001">
+                </div>
+            </div>
+            
+            <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
+                <div class="file-input-wrapper">
+                    <input type="file" id="fileInput" accept=".xlsx,.xls">
+                </div>
+                <div class="upload-icon">📦</div>
+                <div class="upload-text">Carregar Excel da Caixa/Referência</div>
+                <div class="upload-hint">Ficheiro Excel com todos os materiais (ex: F8.xlsx)</div>
+                <div id="fileName" style="margin-top: 10px; color: #475569; font-size: 0.9em;"></div>
+            </div>
+            
+            <div id="successMessage" style="display:none; text-align: center;"></div>
+            
+            <div style="display:flex;gap:12px;margin-top:15px;justify-content:center;flex-wrap:wrap;">
+                <button class="btn btn-primary" onclick="saveProjectExcel()" style="display:flex;align-items:center;gap:6px;">
+                    💾 Guardar Excel
+                </button>
+                <button class="btn btn-primary" onclick="document.getElementById('projectFileInput').click()" style="display:flex;align-items:center;gap:6px;">
+                    📂 Carregar Projeto
+                </button>
+                <button class="btn btn-danger" onclick="resetProject()" style="display:flex;align-items:center;gap:6px;">
+                    🔄 Novo Projeto
+                </button>
+                <input type="file" id="projectFileInput" accept=".json" style="display:none;">
+                <input type="file" id="planoPdfInput" accept=".pdf" style="display:none;">
+            </div>
+        </div>
+        
+        <div id="productSelection" class="glass-card" style="display:none;">
+            <h2 class="section-title">Materiais da Caixa</h2>
+            
+            <div class="filter-bar">
+                <div class="filter-group">
+                    <div class="multiplier-control">
+                        <span style="color: #1e293b; font-weight: 700;">🔢 Multiplicador de caixas:</span>
+                        <input type="number" id="multiplicadorInput" value="1" min="1" style="width: 80px;"
+                               onchange="applyGlobalMultiplicador(this.value)">
+                        <span style="color: #64748b; font-weight: 500; font-size: 0.9em;">
+                            (ex: 3 para produzir 3 caixas desta referência)
+                        </span>
+                    </div>
+                </div>
+                <select id="categoryFilter" style="padding: 12px 20px; background: #ffffff; border: 2px solid #cbd5e1; color: #1e293b; border-radius: 12px; font-weight: 600;">
+                    <option value="">Todas Categorias</option>
+                    <option value="tabuleiro">Tabuleiros</option>
+                    <option value="tabua">Tábuas</option>
+                    <option value="barrote">Barrotes</option>
+                </select>
+                <button class="btn btn-primary" onclick="clearFilters()">Limpar Filtros</button>
+            </div>
+            
+            <div class="table-wrapper">
+                <div class="table-container">
+                    <table class="product-table">
+                        <thead>
+                            <tr>
+                                <th>Referência</th>
+                                <th>Categoria</th>
+                                <th>Comprimento</th>
+                                <th>Profundidade</th>
+                                <th>Espessura</th>
+                                <th>Quantidade</th>
+                                <th>Multiplicador</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="productTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="selected-count" id="selectedCount">0 produtos</div>
+            
+            <button id="optimizeBtn" class="optimize-btn" onclick="optimizeSelected()">
+                🚀 Otimizar Racks
+            </button>
+        </div>
+        
+        <div id="results" style="display:none;">
+            <div class="glass-card">
+                <div class="results-header">
+                    <div>
+                        <div style="color: #94a3b8; font-size: 0.8em; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;">Total de Racks Necessários</div>
+                        <div class="total-racks" id="totalRacks">0</div>
+                    </div>
+                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
+                        <button onclick="generatePDF(false)" class="btn btn-success" style="padding: 12px 20px; font-size: 0.9em;">
+                            📄 Gerar PDF
+                        </button>
+                        <button onclick="generatePDF(true)" class="btn btn-primary" style="padding: 12px 20px; font-size: 0.9em;">
+                            📎 Gerar PDF + Plano
+                        </button>
+                    </div>
+                </div>
+                <div id="racksContainer"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const RACK_LENGTH = 1260;
+        const RACK_DEPTH = 810;
+        const AVAILABLE_HEIGHTS = [400, 600, 800, 1000, 1200];
+        
+        let allProducts = [];
+        let filteredProducts = [];
+        let currentRacksData = [];
+        let otMap = {};
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('projectDate').value = new Date().toISOString().split('T')[0];
+        });
+        
+        function applyGlobalMultiplicador(val) {
+            const mult = Math.max(1, parseInt(val) || 1);
+            allProducts.forEach(p => { p.multiplicador = mult; });
+            renderProductTable();
+        }
+        
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            document.getElementById('fileName').textContent = '📄 ' + file.name;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                    
+                    allProducts = jsonData.map((row, index) => ({
+                        id: index,
+                        referencia: row['Referencia'] || row['referencia'] || '',
+                        categoria: row['Categoria'] || row['categoria'] || '',
+                        comprimento: Number(row['Comprimento (mm)'] || row['comprimento'] || 0),
+                        profundidade: Number(row['Profundidade(mm)'] || row['profundidade'] || 0),
+                        espessura: Number(row['Espessura (mm)'] || row['espessura'] || 0),
+                        quantidade: Number(row['quantidade'] || row['Quantidade'] || 1),
+                        multiplicador: 1,
+                        selected: false
+                    }));
+                    
+                    filteredProducts = [...allProducts];
+                    
+                    // Auto-selecionar todos os produtos ao carregar (caixa completa)
+                    allProducts.forEach(p => p.selected = true);
+                    
+                    const successDiv = document.getElementById('successMessage');
+                    successDiv.innerHTML = `<div class="success-badge">✅ ${allProducts.length} produtos carregados e selecionados automaticamente</div>`;
+                    successDiv.style.display = 'block';
+                    document.getElementById('productSelection').style.display = 'block';
+                    renderProductTable();
+                } catch (error) {
+                    alert('Erro ao ler Excel: ' + error.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+        
+        document.getElementById('categoryFilter').addEventListener('change', filterProducts);
+        
+        // otMap mantido vazio para compatibilidade com projetos antigos
+        // (funcionalidade de mapa de OTs foi removida - cada ficheiro agora contém todos os materiais)
+        
+        function filterProducts() {
+            const catFilter = document.getElementById('categoryFilter').value.toLowerCase();
+            filteredProducts = allProducts.filter(p => {
+                const matchCat = !catFilter || p.categoria.toLowerCase().includes(catFilter);
+                return matchCat;
+            });
+            renderProductTable();
+        }
+        
+        function clearFilters() {
+            document.getElementById('categoryFilter').value = '';
+            document.getElementById('multiplicadorInput').value = 1;
+            applyGlobalMultiplicador(1);
+            filterProducts();
+        }
+        
+        function renderProductTable() {
+            const tbody = document.getElementById('productTableBody');
+            tbody.innerHTML = '';
+            filteredProducts.forEach(p => {
+                const row = document.createElement('tr');
+                const catClass = getCategoryClass(p.categoria);
+                row.innerHTML = `
+                    <td><strong>${p.referencia}</strong></td>
+                    <td><span class="category-badge ${catClass}">${p.categoria}</span></td>
+                    <td>${p.comprimento} mm</td>
+                    <td>${p.profundidade} mm</td>
+                    <td>${p.espessura} mm</td>
+                    <td>${p.quantidade}</td>
+                    <td style="color:#a78bfa;font-weight:bold;">×${p.multiplicador}</td>
+                    <td style="color:#10b981;font-weight:bold;">${p.quantidade * p.multiplicador}</td>
+                `;
+                tbody.appendChild(row);
+            });
+            updateSelectedCount();
+        }
+        
+        function getCategoryClass(cat) {
+            const c = cat.toLowerCase();
+            if (c.includes('tabuleiro')) return 'category-tabuleiro';
+            if (c.includes('tabua') || c.includes('tábua')) return 'category-tabua';
+            if (c.includes('barrot')) return 'category-barrote';
+            return '';
+        }
+        
+        function updateSelectedCount() {
+            const count = allProducts.length;
+            const totalPecas = allProducts.reduce((s, p) => s + (p.quantidade * p.multiplicador), 0);
+            document.getElementById('selectedCount').textContent = `${count} referências · ${totalPecas} peças totais`;
+            document.getElementById('optimizeBtn').disabled = count === 0;
+        }
+        
+        function optimizeSelected() {
+            if (allProducts.length === 0) return alert('Carregue um ficheiro primeiro!');
+            const racks = optimizeRacks(allProducts);
+            displayResults(racks);
+        }
+        
+        function optimizeRacks(products) {
+            const byCat = {tabuleiro: [], tabua: [], barrote: []};
+            products.forEach(p => {
+                const cat = p.categoria.toLowerCase();
+                const total = p.quantidade * p.multiplicador;
+                for (let i = 0; i < total; i++) {
+                    const item = {...p, instanceId: `${p.id}-${i}`};
+                    if (cat.includes('tabuleiro')) byCat.tabuleiro.push(item);
+                    else if (cat.includes('tabua') || cat.includes('tábua')) byCat.tabua.push(item);
+                    else if (cat.includes('barrot')) byCat.barrote.push(item);
+                }
+            });
+            
+            const racks = [];
+            let rackId = 1;
+            
+            // Tolerância de espessura: peças com espessura ≤ esta diferença podem partilhar layer
+            // (útil para espessuras 12 vs 15 vs 18 — caso queira igualar)
+            // Por defeito 0 = só peças com espessura IGUAL
+            const TOL_ESPESSURA = 0;
+            
+            // Calcula quantos "slots" cabem dada uma dimensão de slot e as dimensões da peça
+            function calcularSlots(slotL, slotD, pieceL, pieceD) {
+                if (pieceL > slotL || pieceD > slotD) return 0;
+                // Quantas peças cabem em cada "slot" — na prática, 1 peça ocupa 1 slot
+                // mas pode ser útil no futuro para subdividir slots
+                return 1;
+            }
+            
+            // Determina a melhor orientação (L×D vs D×L) para maximizar peças no rack
+            function melhorOrientacao(comprimento, profundidade) {
+                const effL = Math.min(comprimento, RACK_LENGTH);
+                const effD = Math.min(profundidade, RACK_DEPTH);
+                const ppl1 = Math.floor(RACK_LENGTH / effL) * Math.floor(RACK_DEPTH / effD);
+                const ppl2 = Math.floor(RACK_LENGTH / effD) * Math.floor(RACK_DEPTH / effL);
+                const useRot = ppl2 > ppl1;
+                return {
+                    rotated: useRot,
+                    actL: useRot ? effD : effL,
+                    actD: useRot ? effL : effD,
+                    ppl: useRot ? ppl2 : ppl1,
+                    ppr: useRot ? Math.floor(RACK_LENGTH / effD) : Math.floor(RACK_LENGTH / effL)
+                };
+            }
+            
+            ['tabuleiro', 'tabua', 'barrote'].forEach(catKey => {
+                const items = byCat[catKey];
+                if (items.length === 0) return;
+                
+                const groups = {};
+                items.forEach(item => {
+                    const key = `${item.comprimento}x${item.profundidade}x${item.espessura}`;
+                    if (!groups[key]) groups[key] = {products: [], template: item};
+                    groups[key].products.push(item);
+                });
+                
+                // Ordenar peças por dimensão decrescente:
+                // Maior área de base primeiro (peças grandes definem o tamanho do slot)
+                // Espessura como desempate (mais espessa primeiro)
+                const sorted = Object.values(groups).sort((a, b) => {
+                    const areaA = a.template.comprimento * a.template.profundidade;
+                    const areaB = b.template.comprimento * b.template.profundidade;
+                    if (areaB !== areaA) return areaB - areaA;
+                    return b.template.espessura - a.template.espessura;
+                });
+                
+                let rack = {id: rackId++, height: AVAILABLE_HEIGHTS[0], items: [], category: catKey, layers: []};
+                
+                for (let group of sorted) {
+                    const tpl = group.template;
+                    const prods = group.products;
+                    const orient = melhorOrientacao(tpl.comprimento, tpl.profundidade);
+                    
+                    let remaining = [...prods];
+                    
+                    while (remaining.length > 0) {
+                        // 1) Tentar encaixar em layer existente do rack actual
+                        //    Uma peça encaixa numa layer se:
+                        //    - espessura é IGUAL à da layer (diferença <= TOL_ESPESSURA)
+                        //    - cabe num slot livre da layer (comprimento × profundidade)
+                        let layer = null;
+                        let layerOrient = null;
+                        
+                        for (let l of rack.layers) {
+                            if (Math.abs(l.height - tpl.espessura) > TOL_ESPESSURA) continue;
+                            if (l.usedArea.length >= l.ppl) continue;
+                            
+                            // Verificar se a peça cabe num slot desta layer
+                            // (considerando a orientação da layer)
+                            const fits1 = tpl.comprimento <= l.actL && tpl.profundidade <= l.actD;
+                            const fits2 = tpl.profundidade <= l.actL && tpl.comprimento <= l.actD;
+                            if (!fits1 && !fits2) continue;
+                            
+                            layer = l;
+                            // Escolher orientação que encaixa (preferir a mesma do slot)
+                            layerOrient = {
+                                rotated: fits1 ? false : true,
+                                // As dimensões reais da peça (mantém as dela, não do slot)
+                                pieceL: fits1 ? tpl.comprimento : tpl.profundidade,
+                                pieceD: fits1 ? tpl.profundidade : tpl.comprimento
+                            };
+                            break;
+                        }
+                        
+                        // 2) Se não coube em nenhuma layer, criar uma nova no rack actual
+                        if (!layer) {
+                            let newZ = 0;
+                            if (rack.layers.length > 0) {
+                                const lastL = rack.layers[rack.layers.length - 1];
+                                newZ = lastL.z + lastL.height;
+                            }
+                            
+                            // Precisa crescer o rack?
+                            if (newZ + tpl.espessura > rack.height) {
+                                const reqH = newZ + tpl.espessura;
+                                let increased = false;
+                                for (let h of AVAILABLE_HEIGHTS) {
+                                    if (h >= reqH && h > rack.height) {
+                                        rack.height = h;
+                                        increased = true;
+                                        break;
+                                    }
+                                }
+                                // Se não há rack suficientemente grande, abrir um novo
+                                if (!increased) {
+                                    if (rack.items.length > 0) racks.push(rack);
+                                    rack = {id: rackId++, height: AVAILABLE_HEIGHTS[0], items: [], category: catKey, layers: []};
+                                    newZ = 0;
+                                }
+                            }
+                            
+                            // Nova layer — o slot é dimensionado pela peça actual (a maior do grupo,
+                            // mas peças mais pequenas de outros grupos poderão depois usá-lo)
+                            layer = {
+                                z: newZ,
+                                height: tpl.espessura,
+                                usedArea: [],
+                                ppr: orient.ppr,
+                                ppl: orient.ppl,
+                                actL: orient.actL,
+                                actD: orient.actD
+                            };
+                            rack.layers.push(layer);
+                            layerOrient = {
+                                rotated: orient.rotated,
+                                pieceL: orient.actL,
+                                pieceD: orient.actD
+                            };
+                        }
+                        
+                        // 3) Colocar o máximo possível de peças deste grupo nesta layer
+                        //    Só colocamos peças que usem a mesma orientação (evita misturar)
+                        const toPlace = Math.min(layer.ppl - layer.usedArea.length, remaining.length);
+                        for (let i = 0; i < toPlace; i++) {
+                            const prod = remaining.shift();
+                            const idx = layer.usedArea.length;
+                            const row = Math.floor(idx / layer.ppr);
+                            const col = idx % layer.ppr;
+                            const x = col * layer.actL;
+                            const y = row * layer.actD;
+                            rack.items.push({
+                                ...prod,
+                                x, y, z: layer.z,
+                                rotated: layerOrient.rotated,
+                                displayLength: layerOrient.pieceL,
+                                displayDepth: layerOrient.pieceD
+                            });
+                            layer.usedArea.push({x, y});
+                        }
+                    }
+                }
+                
+                if (rack.items.length > 0) racks.push(rack);
+            });
+            
+            return racks;
+        }
+        
+        function getCategoryColor(cat) {
+            const c = cat.toLowerCase();
+            if (c.includes('tabuleiro')) return '#3b82f6';
+            if (c.includes('tabua') || c.includes('tábua')) return '#0ea5e9';
+            if (c.includes('barrot')) return '#06b6d4';
+            return '#6b7280';
+        }
+        
+        function displayResults(racks) {
+            currentRacksData = racks;
+            document.getElementById('results').style.display = 'block';
+            document.getElementById('totalRacks').textContent = racks.length;
+            
+            const container = document.getElementById('racksContainer');
+            container.innerHTML = '';
+            
+            racks.forEach(rack => {
+                const div = document.createElement('div');
+                div.className = 'rack-card';
+                
+                let catName = '';
+                let catColor = '';
+                if (rack.category === 'tabuleiro') {
+                    catName = 'Tabuleiros';
+                    catColor = '#3b82f6';
+                } else if (rack.category === 'tabua') {
+                    catName = 'Tábuas';
+                    catColor = '#0ea5e9';
+                } else {
+                    catName = 'Barrotes';
+                    catColor = '#06b6d4';
+                }
+                
+                const byDim = {};
+                rack.items.forEach(item => {
+                    const key = `${item.comprimento}x${item.profundidade}x${item.espessura}`;
+                    if (!byDim[key]) byDim[key] = [];
+                    byDim[key].push(item);
+                });
+                
+                let tableHTML = `
+                    <h3 style="color: #1e293b; font-size: 1.1em; margin: 20px 0 15px 0; font-weight: 700;">📋 Detalhamento por Dimensão</h3>
+                    <table class="detail-table">
+                        <thead>
+                            <tr>
+                                <th>Dimensões (C×P×E mm)</th>
+                                <th>Qtd Peças</th>
+                                <th>Por Linha</th>
+                                <th>Linhas/Camada</th>
+                                <th>Peças/Camada</th>
+                                <th>Nº Camadas</th>
+                                <th>Altura Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                Object.keys(byDim).sort().forEach((dimKey) => {
+                    const items = byDim[dimKey];
+                    const first = items[0];
+                    
+                    const effL = Math.min(first.comprimento, RACK_LENGTH);
+                    const effD = Math.min(first.profundidade, RACK_DEPTH);
+                    
+                    const ppr1 = Math.floor(RACK_LENGTH / effL);
+                    const rpl1 = Math.floor(RACK_DEPTH / effD);
+                    const ppl1 = ppr1 * rpl1;
+                    
+                    const ppr2 = Math.floor(RACK_LENGTH / effD);
+                    const rpl2 = Math.floor(RACK_DEPTH / effL);
+                    const ppl2 = ppr2 * rpl2;
+                    
+                    let ppr, rpl, ppl;
+                    if (ppl2 > ppl1) {
+                        ppr = ppr2;
+                        rpl = rpl2;
+                        ppl = ppl2;
+                    } else {
+                        ppr = ppr1;
+                        rpl = rpl1;
+                        ppl = ppl1;
+                    }
+                    
+                    const numLayers = Math.ceil(items.length / ppl);
+                    const totalHeight = numLayers * first.espessura;
+                    
+                    tableHTML += `
+                        <tr>
+                            <td style="font-weight: 700;">${first.comprimento} × ${first.profundidade} × ${first.espessura}</td>
+                            <td style="font-weight: 700; color: #3b82f6;">${items.length}</td>
+                            <td>${ppr}</td>
+                            <td>${rpl}</td>
+                            <td style="font-weight: 700; color: #a78bfa;">${ppl}</td>
+                            <td style="font-weight: 700;">${numLayers}</td>
+                            <td style="font-weight: 700; color: #0ea5e9;">${totalHeight} mm</td>
+                        </tr>
+                    `;
+                });
+                
+                tableHTML += `</tbody></table>`;
+                
+                // Calcular altura total efectiva ocupada pelas peças
+                const alturaPecas = rack.layers.length > 0
+                    ? Math.max(...rack.layers.map(l => l.z + l.height))
+                    : 0;
+                const aproveitamento = rack.height > 0 
+                    ? Math.round((alturaPecas / rack.height) * 100)
+                    : 0;
+                
+                div.innerHTML = `
+                    <div class="rack-header">
+                        <div class="rack-title">
+                            🗂️ Rack #${rack.id} - <span style="color:${catColor}">${catName}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="rack-stats">
+                        <div class="stat-box">
+                            <div class="stat-label">Altura do Rack</div>
+                            <div class="stat-value" style="color: #3b82f6;">${rack.height} mm</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Altura das Peças</div>
+                            <div class="stat-value" style="color: #f59e0b;">${alturaPecas} mm</div>
+                            <div style="font-size:0.75em; color:#64748b; margin-top:2px;">${aproveitamento}% aproveitado</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Total de Peças</div>
+                            <div class="stat-value" style="color: #0ea5e9;">${rack.items.length}</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Categoria</div>
+                            <div class="stat-value" style="color: ${catColor}; font-size: 1.3em;">${catName}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="rack-3d-container" id="rack3d-${rack.id}">
+                        <div class="controls-3d">
+                            <div class="controls-title">🎮 Controlos</div>
+                            <div class="control-item">🖱️ Arrasta para rodar</div>
+                            <div class="control-item">🔍 Scroll para zoom</div>
+                            <div style="margin-top: 15px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.2);">
+                                <div class="control-item" style="color: #ef4444; font-weight: 700;">⚠️ Borda vermelha = Excede rack</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    ${tableHTML}
+                `;
+                
+                container.appendChild(div);
+                setTimeout(() => render3DRack(rack), 100);
+            });
+            
+            document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        function saveProject() {
+            const projectData = {
+                version: '1.1',
+                projectInfo: {
+                    name: document.getElementById('projectName').value || 'Sem nome',
+                    date: document.getElementById('projectDate').value,
+                    ot: document.getElementById('projectOT').value || 'N/A'
+                },
+                products: allProducts,
+                otMap: otMap,
+                timestamp: new Date().toISOString()
+            };
+            
+            const dataStr = JSON.stringify(projectData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            const fileName = `projeto-racks-${projectData.projectInfo.name.replace(/[^a-zA-Z0-9]/g, '-')}-${new Date().toISOString().split('T')[0]}.json`;
+            link.download = fileName;
+            link.click();
+            
+            URL.revokeObjectURL(url);
+            
+            alert(`✅ Projeto guardado com sucesso!\nFicheiro: ${fileName}`);
+        }
+        
+        function saveProjectExcel() {
+            const projectName = document.getElementById('projectName').value || 'Sem nome';
+            const projectDate = document.getElementById('projectDate').value || new Date().toISOString().split('T')[0];
+            const projectOT = document.getElementById('projectOT').value || 'N/A';
+            
+            const wb = XLSX.utils.book_new();
+            
+            const infoData = [
+                ['INFORMAÇÃO DO PROJETO'],
+                ['Nome', projectName],
+                ['Data', projectDate],
+                ['OT', projectOT],
+                ['Gerado em', new Date().toLocaleString('pt-PT')],
+                []
+            ];
+            const wsInfo = XLSX.utils.aoa_to_sheet(infoData);
+            XLSX.utils.book_append_sheet(wb, wsInfo, 'Info Projeto');
+            
+            const productsData = [
+                ['Referência', 'Categoria', 'Comprimento (mm)', 'Profundidade (mm)', 'Espessura (mm)', 'Quantidade', 'Multiplicador', 'Total', 'Selecionado']
+            ];
+            
+            allProducts.forEach(p => {
+                productsData.push([
+                    p.referencia,
+                    p.categoria,
+                    p.comprimento,
+                    p.profundidade,
+                    p.espessura,
+                    p.quantidade,
+                    p.multiplicador,
+                    p.quantidade * p.multiplicador,
+                    p.selected ? 'SIM' : 'NÃO'
+                ]);
+            });
+            
+            const wsProducts = XLSX.utils.aoa_to_sheet(productsData);
+            XLSX.utils.book_append_sheet(wb, wsProducts, 'Produtos');
+            
+            if (Object.keys(otMap).length > 0) {
+                const otData = [['OT', 'Posição', 'Quantidade']];
+                Object.keys(otMap).forEach(ot => {
+                    otMap[ot].forEach(item => {
+                        otData.push([ot, item.posicion, item.quantidade]);
+                    });
+                });
+                const wsOT = XLSX.utils.aoa_to_sheet(otData);
+                XLSX.utils.book_append_sheet(wb, wsOT, 'Mapa OTs');
+            }
+            
+            const selectedProducts = allProducts.filter(p => p.selected);
+            if (selectedProducts.length > 0) {
+                const selectedData = [
+                    ['Referência', 'Categoria', 'Comprimento (mm)', 'Profundidade (mm)', 'Espessura (mm)', 'Quantidade', 'Multiplicador', 'Total']
+                ];
+                
+                selectedProducts.forEach(p => {
+                    selectedData.push([
+                        p.referencia,
+                        p.categoria,
+                        p.comprimento,
+                        p.profundidade,
+                        p.espessura,
+                        p.quantidade,
+                        p.multiplicador,
+                        p.quantidade * p.multiplicador
+                    ]);
+                });
+                
+                const wsSelected = XLSX.utils.aoa_to_sheet(selectedData);
+                XLSX.utils.book_append_sheet(wb, wsSelected, 'Produtos Selecionados');
+            }
+            
+            const fileName = `projeto-racks-${projectName.replace(/[^a-zA-Z0-9]/g, '-')}-${new Date().toISOString().split('T')[0]}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+            
+            alert(`✅ Projeto exportado para Excel!\nFicheiro: ${fileName}`);
+        }
+        
+        document.getElementById('projectFileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const projectData = JSON.parse(e.target.result);
+                    
+                    if (!projectData.version || !projectData.products) {
+                        throw new Error('Formato de ficheiro inválido');
+                    }
+                    
+                    document.getElementById('projectName').value = projectData.projectInfo.name || '';
+                    document.getElementById('projectDate').value = projectData.projectInfo.date || '';
+                    document.getElementById('projectOT').value = projectData.projectInfo.ot || '';
+                    
+                    allProducts = projectData.products;
+                    filteredProducts = [...allProducts];
+                    
+                    if (projectData.otMap) {
+                        otMap = projectData.otMap;
+                        // UI de mapa OTs foi removida — otMap mantido apenas para compatibilidade
+                    }
+                    
+                    const successDiv = document.getElementById('successMessage');
+                    successDiv.innerHTML = `<div class="success-badge">✅ Projeto carregado: ${projectData.products.length} produtos!</div>`;
+                    successDiv.style.display = 'block';
+                    document.getElementById('productSelection').style.display = 'block';
+                    renderProductTable();
+                    
+                    alert(`✅ Projeto "${projectData.projectInfo.name}" carregado com sucesso!`);
+                } catch (error) {
+                    alert('Erro ao carregar projeto: ' + error.message);
+                }
+            };
+            reader.readAsText(file);
+            
+            e.target.value = '';
+        });
+        
+        function resetProject() {
+            if (!confirm('Tem certeza que deseja iniciar um novo projeto? Todos os dados não guardados serão perdidos.')) {
+                return;
+            }
+            
+            allProducts = [];
+            filteredProducts = [];
+            currentRacksData = [];
+            otMap = {};
+            
+            document.getElementById('projectName').value = '';
+            document.getElementById('projectDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('projectOT').value = '';
+            document.getElementById('fileName').textContent = '';
+            document.getElementById('fileInput').value = '';
+            document.getElementById('successMessage').style.display = 'none';
+            document.getElementById('productSelection').style.display = 'none';
+            document.getElementById('results').style.display = 'none';
+            
+            document.getElementById('categoryFilter').value = '';
+            document.getElementById('multiplicadorInput').value = 1;
+            
+            alert('✅ Novo projeto iniciado!');
+        }
+        
+        // Registo de instâncias Three.js por rackId — usado para re-renderizar em tamanhos diferentes para o PDF
+        const rack3DRegistry = {};
+        
+        function render3DRack(rack) {
+            const container = document.getElementById(`rack3d-${rack.id}`);
+            if (!container) return;
+            
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1e293b);
+            scene.fog = new THREE.Fog(0x1e293b, 3000, 7000);
+            
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            
+            const camera = new THREE.PerspectiveCamera(50, width / height, 1, 10000);
+            const centerX = RACK_LENGTH / 2;
+            const centerY = rack.height / 2;
+            const centerZ = RACK_DEPTH / 2;
+            camera.position.set(centerX + 1800, centerY + 1200, centerZ + 1800);
+            camera.lookAt(centerX, centerY, centerZ);
+            
+            const renderer = new THREE.WebGLRenderer({ 
+                antialias: true,
+                preserveDrawingBuffer: true,
+                alpha: true
+            });
+            renderer.setSize(width, height);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+            
+            // Registar para uso pelo PDF
+            rack3DRegistry[rack.id] = { renderer, scene, camera, rack };
+            
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            
+            const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            mainLight.position.set(2000, 3000, 2000);
+            mainLight.castShadow = true;
+            mainLight.shadow.camera.left = -2000;
+            mainLight.shadow.camera.right = 2000;
+            mainLight.shadow.camera.top = 2000;
+            mainLight.shadow.camera.bottom = -2000;
+            scene.add(mainLight);
+            
+            const fillLight = new THREE.DirectionalLight(0x3b82f6, 0.3);
+            fillLight.position.set(-1000, 1000, -1000);
+            scene.add(fillLight);
+            
+            const backLight = new THREE.DirectionalLight(0x60a5fa, 0.2);
+            backLight.position.set(0, 500, -2000);
+            scene.add(backLight);
+            
+            const gridHelper = new THREE.GridHelper(
+                Math.max(RACK_LENGTH, RACK_DEPTH) * 2, 
+                30, 
+                0x475569, 
+                0x334155
+            );
+            gridHelper.position.set(centerX, 0, centerZ);
+            scene.add(gridHelper);
+            
+            const floorGeometry = new THREE.PlaneGeometry(5000, 5000);
+            const floorMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x1e293b,
+                roughness: 0.8,
+                metalness: 0.2
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.y = -1;
+            floor.receiveShadow = true;
+            scene.add(floor);
+            
+            const postRadius = 30;
+            const postMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x94a3b8,
+                metalness: 0.8,
+                roughness: 0.2,
+                emissive: 0x334155,
+                emissiveIntensity: 0.1
+            });
+            const postGeometry = new THREE.CylinderGeometry(postRadius, postRadius, rack.height, 32);
+            
+            [[0, 0], [RACK_LENGTH, 0], [0, RACK_DEPTH], [RACK_LENGTH, RACK_DEPTH]].forEach(([x, z]) => {
+                const post = new THREE.Mesh(postGeometry, postMaterial);
+                post.position.set(x, rack.height / 2, z);
+                post.castShadow = true;
+                post.receiveShadow = true;
+                scene.add(post);
+                
+                const capGeometry = new THREE.CylinderGeometry(postRadius * 1.3, postRadius, 20, 32);
+                const cap = new THREE.Mesh(capGeometry, postMaterial);
+                cap.position.set(x, rack.height + 10, z);
+                scene.add(cap);
+            });
+            
+            const frameGeometry = new THREE.BoxGeometry(RACK_LENGTH, rack.height, RACK_DEPTH);
+            const frameEdges = new THREE.EdgesGeometry(frameGeometry);
+            const frameLine = new THREE.LineSegments(
+                frameEdges,
+                new THREE.LineBasicMaterial({ 
+                    color: 0x3b82f6,
+                    linewidth: 3,
+                    transparent: true,
+                    opacity: 0.6
+                })
+            );
+            frameLine.position.set(centerX, centerY, centerZ);
+            scene.add(frameLine);
+            
+            rack.items.forEach(item => {
+                let realL, realD;
+                if (item.rotated) {
+                    realL = item.profundidade;
+                    realD = item.comprimento;
+                } else {
+                    realL = item.comprimento;
+                    realD = item.profundidade;
+                }
+                
+                const exceedsLength = realL > RACK_LENGTH;
+                const exceedsDepth = realD > RACK_DEPTH;
+                const exceedsRack = exceedsLength || exceedsDepth;
+                
+                const geometry = new THREE.BoxGeometry(realL, item.espessura, realD);
+                const color = new THREE.Color(getCategoryColor(item.categoria));
+                
+                const material = new THREE.MeshStandardMaterial({
+                    color: color,
+                    metalness: 0.3,
+                    roughness: 0.4,
+                    emissive: color,
+                    emissiveIntensity: exceedsRack ? 0.3 : 0.1,
+                    transparent: exceedsRack,
+                    opacity: exceedsRack ? 0.7 : 1.0
+                });
+                
+                const mesh = new THREE.Mesh(geometry, material);
+                
+                let posX, posZ;
+                
+                if (exceedsLength) {
+                    posX = RACK_LENGTH / 2;
+                } else {
+                    posX = item.x + realL / 2;
+                }
+                
+                if (exceedsDepth) {
+                    posZ = RACK_DEPTH / 2;
+                } else {
+                    posZ = item.y + realD / 2;
+                }
+                
+                mesh.position.set(
+                    posX,
+                    item.z + item.espessura / 2,
+                    posZ
+                );
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                scene.add(mesh);
+                
+                const edges = new THREE.EdgesGeometry(geometry);
+                const edgeColor = exceedsRack ? 0xff3b3b : 0x000000;
+                const edgeMaterial = new THREE.LineBasicMaterial({ 
+                    color: edgeColor,
+                    linewidth: 2,
+                    transparent: true,
+                    opacity: exceedsRack ? 1.0 : 0.3
+                });
+                const edgeLine = new THREE.LineSegments(edges, edgeMaterial);
+                edgeLine.position.copy(mesh.position);
+                scene.add(edgeLine);
+                
+                if (exceedsRack) {
+                    const alertGeometry = new THREE.BoxGeometry(realL + 10, item.espessura + 10, realD + 10);
+                    const alertEdges = new THREE.EdgesGeometry(alertGeometry);
+                    const alertLine = new THREE.LineSegments(
+                        alertEdges,
+                        new THREE.LineBasicMaterial({ 
+                            color: 0xff0000,
+                            linewidth: 3,
+                            transparent: true,
+                            opacity: 0.5
+                        })
+                    );
+                    alertLine.position.copy(mesh.position);
+                    scene.add(alertLine);
+                }
+            });
+            
+            let isDragging = false;
+            let previousMousePosition = { x: 0, y: 0 };
+            let cameraAngle = { theta: Math.PI / 4, phi: Math.PI / 4 };
+            let cameraDistance = 2500;
+            
+            renderer.domElement.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            });
+            
+            renderer.domElement.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                const deltaX = e.clientX - previousMousePosition.x;
+                const deltaY = e.clientY - previousMousePosition.y;
+                cameraAngle.theta -= deltaX * 0.01;
+                cameraAngle.phi -= deltaY * 0.01;
+                cameraAngle.phi = Math.max(0.1, Math.min(Math.PI - 0.1, cameraAngle.phi));
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+                updateCameraPosition();
+            });
+            
+            renderer.domElement.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+            
+            renderer.domElement.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                cameraDistance += e.deltaY * 2;
+                cameraDistance = Math.max(800, Math.min(5000, cameraDistance));
+                updateCameraPosition();
+            });
+            
+            function updateCameraPosition() {
+                camera.position.x = centerX + cameraDistance * Math.sin(cameraAngle.phi) * Math.cos(cameraAngle.theta);
+                camera.position.y = centerY + cameraDistance * Math.cos(cameraAngle.phi);
+                camera.position.z = centerZ + cameraDistance * Math.sin(cameraAngle.phi) * Math.sin(cameraAngle.theta);
+                camera.lookAt(centerX, centerY, centerZ);
+                renderer.render(scene, camera);
+            }
+            
+            updateCameraPosition();
+            
+            function animate() {
+                requestAnimationFrame(animate);
+                renderer.render(scene, camera);
+            }
+            animate();
+        }
+        
+        // Captura o canvas 3D de um rack nas dimensões pedidas (px),
+        // redimensionando temporariamente o renderer Three.js via registo global.
+        async function captureRack3DAt(rackId, targetWidth, targetHeight) {
+            const entry = rack3DRegistry[rackId];
+            if (!entry) return null;
+            const { scene, camera: origCamera } = entry;
+            
+            // Em vez de mexer no renderer existente, criamos um renderer offscreen
+            // temporário com as dimensões EXACTAS que queremos no PDF.
+            // Isto garante que a imagem tem o aspect ratio correto sem bandas.
+            let tempRenderer = null;
+            try {
+                tempRenderer = new THREE.WebGLRenderer({
+                    antialias: true,
+                    preserveDrawingBuffer: true,
+                    alpha: false
+                });
+                tempRenderer.setSize(targetWidth, targetHeight, false);
+                tempRenderer.setPixelRatio(1);
+                tempRenderer.setClearColor(0x1e293b, 1);
+                
+                // Clonar a câmara com o novo aspect ratio (para não mexer na original)
+                const tempCamera = origCamera.clone();
+                tempCamera.aspect = targetWidth / targetHeight;
+                tempCamera.updateProjectionMatrix();
+                
+                tempRenderer.render(scene, tempCamera);
+                const imgData = tempRenderer.domElement.toDataURL('image/jpeg', 0.85);
+                return imgData;
+            } catch (err) {
+                console.error('captureRack3DAt erro:', err);
+                return null;
+            } finally {
+                if (tempRenderer) {
+                    tempRenderer.dispose();
+                    // Limpar recursos do canvas
+                    const ctx = tempRenderer.domElement.getContext('webgl') 
+                               || tempRenderer.domElement.getContext('webgl2');
+                    if (ctx && ctx.getExtension) {
+                        const loseCtx = ctx.getExtension('WEBGL_lose_context');
+                        if (loseCtx) loseCtx.loseContext();
+                    }
+                }
+            }
+        }
+
+        // Pede ao utilizador para escolher um PDF com o plano da caixa.
+        // IMPORTANTE: esta função deve ser chamada DIRECTAMENTE a partir de um
+        // click handler do utilizador (sem aguardar nada antes), senão o browser
+        // bloqueia o file picker com "File chooser dialog can only be shown with a user activation"
+        function pedirPlanoPDF() {
+            return new Promise((resolve) => {
+                const input = document.getElementById('planoPdfInput');
+                input.value = '';
+                
+                let resolved = false;
+                let cancelTimer = null;
+                
+                const terminar = (result) => {
+                    if (resolved) return;
+                    resolved = true;
+                    input.removeEventListener('change', onChange);
+                    window.removeEventListener('focus', onFocus);
+                    if (cancelTimer) clearTimeout(cancelTimer);
+                    resolve(result);
+                };
+                
+                const onChange = async (e) => {
+                    // Cancelar o timer de detecção — o utilizador escolheu algo
+                    if (cancelTimer) { clearTimeout(cancelTimer); cancelTimer = null; }
+                    
+                    const file = e.target.files && e.target.files[0];
+                    if (!file) { terminar(null); return; }
+                    try {
+                        const buf = await file.arrayBuffer();
+                        terminar(new Uint8Array(buf));
+                    } catch (err) {
+                        console.error('Erro ao ler plano:', err);
+                        alert('Erro ao ler o PDF do plano: ' + err.message);
+                        terminar(null);
+                    }
+                };
+                
+                // Detecção de cancelamento: quando a janela volta a ter foco,
+                // espera até 2 segundos pelo 'change'. Se não vier, assume cancelamento.
+                // (2s é folgado para o browser processar mesmo ficheiros grandes)
+                const onFocus = () => {
+                    if (cancelTimer || resolved) return;
+                    cancelTimer = setTimeout(() => {
+                        if (!resolved && (!input.files || input.files.length === 0)) {
+                            terminar(null);
+                        }
+                    }, 2000);
+                };
+                
+                input.addEventListener('change', onChange);
+                window.addEventListener('focus', onFocus);
+                
+                // Abrir file picker — TEM de ser síncrono com a activação do utilizador
+                input.click();
+            });
+        }
+        
+        async function generatePDF(anexarPlano) {
+            const button = event.target;
+            button.disabled = true;
+            const textoOriginal = button.textContent;
+            
+            // Pedir plano PRIMEIRO (enquanto ainda temos activação do utilizador)
+            let planoPdfBytes = null;
+            if (anexarPlano) {
+                button.textContent = '⏳ Aguardando plano...';
+                try {
+                    planoPdfBytes = await pedirPlanoPDF();
+                    if (!planoPdfBytes) {
+                        const continuar = confirm('Não foi selecionado plano. Deseja gerar o PDF sem plano?\n\n¿No se ha seleccionado plano. Desea generar el PDF sin plano?');
+                        if (!continuar) {
+                            button.disabled = false;
+                            button.textContent = textoOriginal;
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Erro ao pedir plano:', e);
+                }
+            }
+            
+            button.textContent = '⏳ Gerando PDF...';
+            
+            try {
+                if (typeof window.jspdf === 'undefined') {
+                    alert('Erro: Biblioteca jsPDF não carregada. Recarrega a página.');
+                    throw new Error('jsPDF não disponível');
+                }
+                
+                const projectName = document.getElementById('projectName').value || 'Sem nome / Sin nombre';
+                const projectDate = document.getElementById('projectDate').value || new Date().toISOString().split('T')[0];
+                
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const pageWidth = pdf.internal.pageSize.getWidth();
+                const pageHeight = pdf.internal.pageSize.getHeight();
+                const margin = 12;
+                let yPosition = margin;
+                
+                // Helper bilingue: texto PT / ES em linha
+                const bilang = (pt, es) => `${pt} / ${es}`;
+                
+                // ===== CABEÇALHO =====
+                pdf.setFontSize(16);
+                pdf.setTextColor(59, 130, 246);
+                pdf.text(bilang('Relatorio de Otimizacao de Racks',
+                                 'Informe de Optimizacion de Racks'),
+                         pageWidth / 2, yPosition, { align: 'center' });
+                yPosition += 7;
+                
+                pdf.setDrawColor(59, 130, 246);
+                pdf.setLineWidth(0.4);
+                pdf.line(margin, yPosition, pageWidth - margin, yPosition);
+                yPosition += 5;
+                
+                // ===== INFO DO PROJETO (compacta em 1 linha) =====
+                pdf.setFontSize(9);
+                const dataFormatada = new Date(projectDate).toLocaleDateString('pt-PT');
+                
+                // Label "Projeto / Proyecto:" normal + nome a bold
+                pdf.setTextColor(60, 60, 60);
+                pdf.setFont('helvetica', 'normal');
+                const labelProjeto = `${bilang('Projeto', 'Proyecto')}: `;
+                pdf.text(labelProjeto, margin, yPosition);
+                const labelProjetoWidth = pdf.getTextWidth(labelProjeto);
+                pdf.setFont('helvetica', 'bold');
+                pdf.text(projectName, margin + labelProjetoWidth, yPosition);
+                
+                // Data à direita
+                pdf.setFont('helvetica', 'normal');
+                pdf.text(`${bilang('Data', 'Fecha')}: ${dataFormatada}`, pageWidth / 2 + 10, yPosition);
+                yPosition += 6;
+                
+                pdf.setDrawColor(220, 220, 220);
+                pdf.line(margin, yPosition, pageWidth - margin, yPosition);
+                yPosition += 5;
+                
+                // ===== RESUMO GERAL =====
+                const totalRacks = currentRacksData.length;
+                const totalPecas = currentRacksData.reduce((sum, rack) => sum + rack.items.length, 0);
+                const numCaixas = Math.max(1, parseInt(document.getElementById('multiplicadorInput').value) || 1);
+                
+                pdf.setFontSize(11);
+                pdf.setTextColor(0, 0, 0);
+                pdf.text(bilang('Resumo Geral', 'Resumen General'), margin, yPosition);
+                yPosition += 5;
+                
+                pdf.setFontSize(9);
+                pdf.setTextColor(60, 60, 60);
+                pdf.text(`${bilang('Material para producao de', 'Material para produccion de')}: ${numCaixas} ${bilang('caixa(s)', 'caja(s)')}`, margin + 3, yPosition);
+                yPosition += 4;
+                pdf.text(`${bilang('Total de racks', 'Total de racks')}: ${totalRacks}`, margin + 3, yPosition);
+                yPosition += 4;
+                pdf.text(`${bilang('Total de pecas', 'Total de piezas')}: ${totalPecas}`, margin + 3, yPosition);
+                yPosition += 7;
+                
+                // ===== RACKS EM GRELHA 2x2 =====
+                // Cada página comporta até 4 racks (2 colunas × 2 linhas)
+                // Calcular espaço disponível e tamanho de cada célula
+                const cellGap = 4;
+                const cellWidth = (pageWidth - 2 * margin - cellGap) / 2;
+                
+                // Altura disponível na primeira página (após cabeçalho + resumo)
+                const topSpace = pageHeight - yPosition - margin;
+                // Em páginas subsequentes, só temos cabeçalho mínimo
+                const fullSpace = pageHeight - 2 * margin - 6;
+                
+                // Para caber até 2 racks por linha e 2 linhas por página → cellHeight ≈ metade
+                let cellHeight;
+                if (totalRacks <= 2) {
+                    cellHeight = topSpace - 5;
+                } else if (totalRacks <= 4) {
+                    cellHeight = (topSpace - cellGap) / 2;
+                } else {
+                    // 5+ racks: página 1 com 2 racks (mais espaço), páginas seguintes com 4 cada
+                    cellHeight = (fullSpace - cellGap) / 2;
+                }
+                
+                const imgMaxHeight = cellHeight - 22; // deixa espaço para título + dimensões
+                
+                // Função para renderizar um rack numa célula
+                async function renderRackCell(rack, x, y, w, h) {
+                    // Cor por categoria
+                    let categoryNamePT, categoryNameES, catColor;
+                    if (rack.category === 'tabuleiro') {
+                        categoryNamePT = 'Tabuleiros'; categoryNameES = 'Tableros';
+                        catColor = [59, 130, 246];
+                    } else if (rack.category === 'tabua') {
+                        categoryNamePT = 'Tabuas'; categoryNameES = 'Tablas';
+                        catColor = [14, 165, 233];
+                    } else {
+                        categoryNamePT = 'Barrotes'; categoryNameES = 'Listones';
+                        catColor = [6, 182, 212];
+                    }
+                    
+                    // Borda da célula
+                    pdf.setDrawColor(220, 220, 220);
+                    pdf.setLineWidth(0.3);
+                    pdf.rect(x, y, w, h);
+                    
+                    // Título do rack
+                    let cy = y + 5;
+                    pdf.setFontSize(10);
+                    pdf.setTextColor(...catColor);
+                    pdf.text(`Rack #${rack.id} - ${categoryNamePT} / ${categoryNameES}`, x + 2, cy);
+                    cy += 4;
+                    
+                    // Altura do rack / das peças
+                    const alturaPecas = rack.layers && rack.layers.length > 0
+                        ? Math.max(...rack.layers.map(l => l.z + l.height))
+                        : 0;
+                    
+                    pdf.setFontSize(8);
+                    pdf.setTextColor(60, 60, 60);
+                    pdf.text(`${bilang('Altura', 'Altura')}: ${rack.height}mm | ${bilang('Pecas', 'Piezas')}: ${alturaPecas}mm | ${bilang('Total', 'Total')}: ${rack.items.length}`,
+                             x + 2, cy);
+                    cy += 4;
+                    
+                    // ===== Detalhamento por dimensão =====
+                    // Agrupar peças por dimensões e calcular camadas/altura de cada grupo
+                    const itemsByDim = {};
+                    rack.items.forEach(item => {
+                        const key = `${item.comprimento}x${item.profundidade}x${item.espessura}`;
+                        if (!itemsByDim[key]) itemsByDim[key] = [];
+                        itemsByDim[key].push(item);
+                    });
+                    
+                    const detailLines = Object.keys(itemsByDim).sort().map(dimKey => {
+                        const items = itemsByDim[dimKey];
+                        const first = items[0];
+                        const effL = Math.min(first.comprimento, RACK_LENGTH);
+                        const effD = Math.min(first.profundidade, RACK_DEPTH);
+                        const ppl1 = Math.floor(RACK_LENGTH / effL) * Math.floor(RACK_DEPTH / effD);
+                        const ppl2 = Math.floor(RACK_LENGTH / effD) * Math.floor(RACK_DEPTH / effL);
+                        const ppl = Math.max(ppl1, ppl2, 1);
+                        const nCamadas = Math.ceil(items.length / ppl);
+                        const alturaTotal = nCamadas * first.espessura;
+                        return `${dimKey}: ${items.length} ${bilang('pc', 'pz')}, ${nCamadas} ${bilang('cam', 'capas')}, ${alturaTotal}mm`;
+                    });
+                    
+                    // Renderizar TODAS as linhas de detalhe
+                    // Ajustar fonte/espaçamento dinamicamente ao número de dimensões
+                    // para caber tudo sem cortar a imagem 3D demasiado
+                    const nDims = detailLines.length;
+                    let detailFontSize, lineGap;
+                    if (nDims <= 4) {
+                        detailFontSize = 6.5;
+                        lineGap = 2.8;
+                    } else if (nDims <= 8) {
+                        detailFontSize = 6;
+                        lineGap = 2.5;
+                    } else if (nDims <= 12) {
+                        detailFontSize = 5.5;
+                        lineGap = 2.2;
+                    } else {
+                        detailFontSize = 5;
+                        lineGap = 2.0;
+                    }
+                    
+                    pdf.setFontSize(detailFontSize);
+                    pdf.setTextColor(80, 80, 80);
+                    detailLines.forEach(line => {
+                        pdf.text(line, x + 3, cy);
+                        cy += lineGap;
+                    });
+                    cy += 1.5;
+                    
+                    // Imagem 3D (ocupa todo o espaço restante da célula)
+                    const imgPadding = 2;
+                    const imgX = x + imgPadding;
+                    const imgY = cy;
+                    const imgW = w - 2 * imgPadding;
+                    const imgH = y + h - cy - imgPadding;
+                    
+                    const container = document.getElementById(`rack3d-${rack.id}`);
+                    if (container && container.querySelector('canvas')) {
+                        try {
+                            // Renderizar em alta resolução no rácio exato da célula
+                            // (fator 3x para boa qualidade no PDF)
+                            const targetW = Math.round(imgW * 3);
+                            const targetH = Math.round(imgH * 3);
+                            
+                            let imgData = await captureRack3DAt(rack.id, targetW, targetH);
+                            
+                            if (imgData) {
+                                // Perfeita cobertura da área — rácios coincidem
+                                pdf.addImage(imgData, 'JPEG', imgX, imgY, imgW, imgH);
+                            } else {
+                                // Fallback: usa canvas existente e centra preservando aspect ratio
+                                const canvas = container.querySelector('canvas');
+                                const fallback = canvas.toDataURL('image/jpeg', 0.75);
+                                const aspectRatio = canvas.width / canvas.height;
+                                const cellRatio = imgW / imgH;
+                                let finalW, finalH;
+                                if (aspectRatio > cellRatio) {
+                                    finalW = imgW;
+                                    finalH = imgW / aspectRatio;
+                                } else {
+                                    finalH = imgH;
+                                    finalW = imgH * aspectRatio;
+                                }
+                                pdf.addImage(fallback, 'JPEG',
+                                             imgX + (imgW - finalW) / 2,
+                                             imgY + (imgH - finalH) / 2,
+                                             finalW, finalH);
+                            }
+                        } catch (error) {
+                            console.error('Erro ao capturar vista 3D:', error);
+                            pdf.setFontSize(8);
+                            pdf.setTextColor(150, 150, 150);
+                            pdf.text('(Imagem 3D indisponivel)', x + 5, cy + 10);
+                        }
+                    }
+                }
+                
+                // Layout dos racks em grelha
+                let racksProcessed = 0;
+                while (racksProcessed < totalRacks) {
+                    // Quantos racks cabem nesta página?
+                    const isFirstPage = (racksProcessed === 0);
+                    const availableSpace = isFirstPage ? topSpace : fullSpace;
+                    const racksPerPage = availableSpace >= (2 * cellHeight + cellGap) ? 4 : 2;
+                    
+                    const racksThisPage = Math.min(racksPerPage, totalRacks - racksProcessed);
+                    
+                    // Render
+                    for (let i = 0; i < racksThisPage; i++) {
+                        const rack = currentRacksData[racksProcessed + i];
+                        const col = i % 2;
+                        const row = Math.floor(i / 2);
+                        const x = margin + col * (cellWidth + cellGap);
+                        const y = yPosition + row * (cellHeight + cellGap);
+                        await renderRackCell(rack, x, y, cellWidth, cellHeight);
+                    }
+                    
+                    racksProcessed += racksThisPage;
+                    
+                    // Próxima página se houver mais racks
+                    if (racksProcessed < totalRacks) {
+                        pdf.addPage();
+                        yPosition = margin;
+                        
+                        // Cabeçalho mínimo nas páginas seguintes
+                        pdf.setFontSize(8);
+                        pdf.setTextColor(100, 100, 100);
+                        pdf.text(`${projectName} | ${dataFormatada}`, margin, yPosition);
+                        yPosition += 3;
+                        pdf.setDrawColor(220, 220, 220);
+                        pdf.line(margin, yPosition, pageWidth - margin, yPosition);
+                        yPosition += 4;
+                    }
+                }
+                
+                const dataFile = new Date().toISOString().split('T')[0];
+                const projectPrefix = projectName.substring(0, 20).replace(/[^a-zA-Z0-9]/g, '-');
+                const nomeArquivo = `${projectPrefix}-relatorio-racks-${dataFile}.pdf`;
+                
+                // Se há plano anexado, fazer merge via pdf-lib
+                if (planoPdfBytes && window.PDFLib) {
+                    try {
+                        button.textContent = '⏳ A juntar plano...';
+                        const { PDFDocument } = window.PDFLib;
+                        
+                        // Obter bytes do relatório gerado
+                        const relatorioBytes = pdf.output('arraybuffer');
+                        
+                        // Criar documento final e copiar páginas do relatório + plano
+                        const docFinal = await PDFDocument.create();
+                        
+                        const relatorioDoc = await PDFDocument.load(relatorioBytes);
+                        const paginasRelatorio = await docFinal.copyPages(relatorioDoc, relatorioDoc.getPageIndices());
+                        paginasRelatorio.forEach(p => docFinal.addPage(p));
+                        
+                        const planoDoc = await PDFDocument.load(planoPdfBytes);
+                        const paginasPlano = await docFinal.copyPages(planoDoc, planoDoc.getPageIndices());
+                        paginasPlano.forEach(p => docFinal.addPage(p));
+                        
+                        // Guardar PDF combinado
+                        const bytesFinal = await docFinal.save();
+                        const blob = new Blob([bytesFinal], { type: 'application/pdf' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = nomeArquivo;
+                        a.click();
+                        setTimeout(() => URL.revokeObjectURL(url), 1000);
+                        
+                        alert(`✅ PDF gerado com plano anexado!\nFicheiro: ${nomeArquivo}\n(${paginasRelatorio.length} páginas do relatório + ${paginasPlano.length} do plano)`);
+                    } catch (mergeErr) {
+                        console.error('Erro ao juntar plano:', mergeErr);
+                        alert(`Erro ao anexar o plano: ${mergeErr.message}\n\nGuardei o relatório sem o plano.`);
+                        pdf.save(nomeArquivo);
+                    }
+                } else {
+                    // Sem plano: guarda só o relatório
+                    pdf.save(nomeArquivo);
+                    alert(`✅ PDF gerado com sucesso!\nFicheiro: ${nomeArquivo}`);
+                }
+                
+            } catch (error) {
+                console.error('Erro ao gerar PDF:', error);
+                alert(`Erro ao gerar PDF:\n${error.message}`);
+            } finally {
+                button.disabled = false;
+                button.textContent = textoOriginal;
+            }
+        }
+    </script>
+
+<script>
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(err => console.error('SW:', err));
+    });
+}
+</script>
+</body>
+</html>

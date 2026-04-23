@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1d4ed8">
+<title>Otimizador de Racks - Arechaederra</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Racks">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #f0f4f8;
+    min-height: 100vh;
+    padding: 40px 20px;
+    position: relative;
+    overflow-x: hidden;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+        radial-gradient(circle at 20% 30%, rgba(59, 130, 246, 0.2) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(29, 78, 216, 0.2) 0%, transparent 50%),
+        radial-gradient(circle at 50% 90%, rgba(96, 165, 250, 0.15) 0%, transparent 50%);
+    pointer-events: none; z-index: 0;
+}
+.container {
+    max-width: 900px;
+    width: 100%;
+    position: relative;
+    z-index: 1;
+}
+.header {
+    text-align: center;
+    margin-bottom: 40px;
+}
+.logo {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 20px;
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(29, 78, 216, 0.3);
+}
+.header h1 {
+    font-size: 2.4em;
+    font-weight: 900;
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 50%, #60a5fa 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -1.5px;
+    margin-bottom: 8px;
+}
+.header .subtitle {
+    color: #475569;
+    font-size: 1.05em;
+    font-weight: 500;
+}
+.apps-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 24px;
+    margin-bottom: 30px;
+}
+.app-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    border-radius: 20px;
+    padding: 32px 28px;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+.app-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), transparent);
+    opacity: 0;
+    transition: opacity 0.25s;
+}
+.app-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 60px rgba(29, 78, 216, 0.2);
+    border-color: rgba(59, 130, 246, 0.5);
+}
+.app-card:hover::before { opacity: 1; }
+.app-card .icon {
+    font-size: 3em;
+    line-height: 1;
+    position: relative;
+    z-index: 1;
+}
+.app-card h2 {
+    font-size: 1.4em;
+    font-weight: 800;
+    color: #1e40af;
+    position: relative;
+    z-index: 1;
+}
+.app-card p {
+    color: #475569;
+    font-size: 0.95em;
+    line-height: 1.5;
+    flex: 1;
+    position: relative;
+    z-index: 1;
+}
+.app-card .cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #3b82f6;
+    font-weight: 700;
+    font-size: 0.95em;
+    position: relative;
+    z-index: 1;
+}
+.app-card .cta::after {
+    content: '→';
+    transition: transform 0.2s;
+}
+.app-card:hover .cta::after { transform: translateX(4px); }
+
+.install-prompt {
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: 12px;
+    padding: 16px 20px;
+    font-size: 0.9em;
+    color: #334155;
+    text-align: center;
+    display: none;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+.install-prompt.show { display: flex; }
+.install-prompt .btn-install {
+    background: #3b82f6;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.install-prompt .btn-install:hover { background: #2563eb; }
+.install-prompt .btn-dismiss {
+    background: transparent;
+    color: #64748b;
+    border: none;
+    padding: 6px 10px;
+    font-family: inherit;
+    font-size: 0.85em;
+    cursor: pointer;
+}
+
+.footer {
+    margin-top: 40px;
+    text-align: center;
+    color: #64748b;
+    font-size: 0.85em;
+}
+.offline-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: #dcfce7;
+    color: #166534;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 600;
+    margin-top: 8px;
+}
+.offline-badge.offline { background: #fef3c7; color: #92400e; }
+
+@media (max-width: 600px) {
+    .header h1 { font-size: 1.8em; }
+    .apps-grid { grid-template-columns: 1fr; gap: 16px; }
+    .app-card { padding: 24px 20px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <img src="icon-192.png" alt="Logo" class="logo">
+        <h1>Otimizador de Racks</h1>
+        <div class="subtitle">Sistema de gestão de madeiras em armazém</div>
+        <div class="offline-badge" id="connectionBadge">
+            <span id="connectionIcon">🟢</span>
+            <span id="connectionText">Online</span>
+        </div>
+    </div>
+
+    <div class="apps-grid">
+        <a href="converter.html" class="app-card">
+            <div class="icon">🔄</div>
+            <h2>Conversor de OT</h2>
+            <p>Carrega uma Ordem de Trabalho em PDF, extrai a matriz de produtos, permite definir cortes e divisões, e exporta Excel no formato do otimizador.</p>
+            <span class="cta">Abrir conversor</span>
+        </a>
+
+        <a href="optimizer.html" class="app-card">
+            <div class="icon">📊</div>
+            <h2>Otimizador de Racks</h2>
+            <p>Carrega um Excel de produtos, calcula a distribuição ideal em racks (400-1200mm de altura) respeitando categorias, e gera visualização 3D e relatório PDF.</p>
+            <span class="cta">Abrir otimizador</span>
+        </a>
+    </div>
+
+    <div class="install-prompt" id="installPrompt">
+        <span>📲 Instalar como aplicação para acesso rápido e uso offline</span>
+        <button class="btn-install" id="btnInstall">Instalar</button>
+        <button class="btn-dismiss" id="btnDismiss">Agora não</button>
+    </div>
+
+    <div class="footer">
+        <div>Arechaederra · Embalaje &amp; Logística</div>
+        <div style="margin-top:4px; font-size:0.8em;">PWA — funciona offline após primeira visita</div>
+    </div>
+</div>
+
+<script>
+// --- Service Worker Registration ---
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').then(reg => {
+            console.log('SW registado:', reg.scope);
+        }).catch(err => {
+            console.error('Erro SW:', err);
+        });
+    });
+}
+
+// --- Install Prompt ---
+let deferredPrompt = null;
+const installPrompt = document.getElementById('installPrompt');
+const btnInstall = document.getElementById('btnInstall');
+const btnDismiss = document.getElementById('btnDismiss');
+
+window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (!sessionStorage.getItem('install-dismissed')) {
+        installPrompt.classList.add('show');
+    }
+});
+
+btnInstall.addEventListener('click', async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    installPrompt.classList.remove('show');
+});
+
+btnDismiss.addEventListener('click', () => {
+    installPrompt.classList.remove('show');
+    sessionStorage.setItem('install-dismissed', '1');
+});
+
+window.addEventListener('appinstalled', () => {
+    installPrompt.classList.remove('show');
+    deferredPrompt = null;
+});
+
+// --- Online/Offline Status ---
+function updateConnection() {
+    const badge = document.getElementById('connectionBadge');
+    const icon = document.getElementById('connectionIcon');
+    const text = document.getElementById('connectionText');
+    if (navigator.onLine) {
+        badge.classList.remove('offline');
+        icon.textContent = '🟢';
+        text.textContent = 'Online';
+    } else {
+        badge.classList.add('offline');
+        icon.textContent = '🟡';
+        text.textContent = 'Offline (a funcionar em cache)';
+    }
+}
+updateConnection();
+window.addEventListener('online', updateConnection);
+window.addEventListener('offline', updateConnection);
+</script>
+</body>
+</html>

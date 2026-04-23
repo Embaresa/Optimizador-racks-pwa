@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#1d4ed8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Racks">
+<title>Conversor OT → Otimizador de Racks</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #f0f4f8;
+    min-height: 100vh;
+    padding: 20px 15px;
+    position: relative;
+    overflow-x: hidden;
+    color: #1e293b;
+}
+body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+        radial-gradient(circle at 20% 50%, rgba(59, 130, 246, 0.15) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(29, 78, 216, 0.15) 0%, transparent 50%);
+    pointer-events: none; z-index: 0;
+}
+.container { max-width: 1400px; margin: 0 auto; position: relative; z-index: 1; }
+.header { text-align: center; margin-bottom: 25px; }
+.header h1 {
+    font-size: 2.2em; font-weight: 800;
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 50%, #60a5fa 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; margin-bottom: 5px; letter-spacing: -1px;
+}
+.header p { color: #475569; font-size: 0.95em; font-weight: 500; }
+.card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    border-radius: 16px;
+    padding: 25px;
+    margin-bottom: 20px;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.05);
+}
+.card h2 {
+    font-size: 1.2em; font-weight: 700; color: #1e40af;
+    margin-bottom: 15px; display: flex; align-items: center; gap: 10px;
+}
+.upload-zone {
+    border: 2px dashed #93c5fd;
+    border-radius: 12px;
+    padding: 40px 20px;
+    text-align: center;
+    background: #eff6ff;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.upload-zone:hover { background: #dbeafe; border-color: #3b82f6; }
+.upload-zone.has-file { background: #dcfce7; border-color: #16a34a; }
+.upload-zone input { display: none; }
+.upload-zone .icon { font-size: 3em; margin-bottom: 10px; }
+.upload-zone .hint { color: #64748b; font-size: 0.9em; margin-top: 8px; }
+.btn {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 8px;
+    font-family: inherit; font-weight: 600; font-size: 0.9em;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex; align-items: center; gap: 6px;
+}
+.btn-primary { background: #3b82f6; color: white; }
+.btn-primary:hover { background: #2563eb; }
+.btn-primary:disabled { background: #94a3b8; cursor: not-allowed; }
+.btn-success { background: #16a34a; color: white; }
+.btn-success:hover { background: #15803d; }
+.btn-ghost { background: transparent; color: #475569; border: 1px solid #cbd5e1; }
+.btn-ghost:hover { background: #f1f5f9; }
+.btn-sm { padding: 6px 12px; font-size: 0.85em; }
+.ot-info {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 15px;
+}
+.info-cell {
+    background: #f8fafc;
+    border-left: 3px solid #3b82f6;
+    padding: 10px 14px;
+    border-radius: 6px;
+}
+.info-cell .lbl { font-size: 0.75em; color: #64748b; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; }
+.info-cell .val { font-size: 1.05em; font-weight: 700; color: #0f172a; margin-top: 2px; }
+.stats-row {
+    display: flex; gap: 15px; flex-wrap: wrap;
+    padding: 15px; background: #f1f5f9; border-radius: 10px; margin-bottom: 15px;
+}
+.stat-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; background: white; border-radius: 20px;
+    font-size: 0.88em; font-weight: 600; color: #334155;
+}
+.stat-chip.tabuleiro { border: 1.5px solid #3b82f6; color: #1e40af; }
+.stat-chip.tabua { border: 1.5px solid #0ea5e9; color: #0369a1; }
+.stat-chip.barrote { border: 1.5px solid #06b6d4; color: #0e7490; }
+.stat-chip.warn { border: 1.5px solid #f59e0b; color: #b45309; }
+table.preview {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88em;
+}
+table.preview th {
+    background: #1e40af; color: white;
+    padding: 10px 8px; text-align: left; font-weight: 600;
+    position: sticky; top: 0; z-index: 2;
+}
+table.preview td { padding: 8px; border-bottom: 1px solid #e2e8f0; }
+table.preview tr:hover td { background: #f8fafc; }
+table.preview tr.excluded { opacity: 0.4; }
+table.preview tr.oversize td { background: #fef3c7; }
+table.preview tr.oversize:hover td { background: #fde68a; }
+.table-wrap { max-height: 560px; overflow: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
+select.cat {
+    padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 5px;
+    font-family: inherit; font-size: 0.85em; font-weight: 600;
+    cursor: pointer; background: white;
+}
+select.cat.tabuleiro { color: #1e40af; background: #dbeafe; }
+select.cat.tabua { color: #0369a1; background: #e0f2fe; }
+select.cat.barrote { color: #0e7490; background: #cffafe; }
+.badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.75em;
+    font-weight: 700;
+}
+.badge-warn { background: #fef3c7; color: #b45309; }
+.badge-limit { background: #fee2e2; color: #991b1b; font-weight: 700; }
+table.preview tr.exceed-limit td {
+    background: #fee2e2;
+    border-left: 3px solid #dc2626;
+}
+table.preview tr.exceed-limit:hover td { background: #fecaca; }
+table.preview tr.subpeca td {
+    background: #f3e8ff;
+    border-left: 3px solid #a855f7;
+}
+table.preview tr.subpeca:hover td { background: #e9d5ff; }
+.btn-split {
+    background: #7c3aed;
+    color: white;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.78em;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    margin-left: 4px;
+    white-space: nowrap;
+}
+.btn-split:hover { background: #6d28d9; }
+
+/* ============ MODAL DE DIVISÃO (tabuleiros) ============ */
+.split-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+.split-modal-overlay.show { display: flex; animation: modalFadeIn 0.2s ease-out; }
+@keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.split-modal-box {
+    background: white;
+    border-radius: 18px;
+    max-width: 680px;
+    width: 100%;
+    max-height: 90vh;
+    overflow: auto;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.25);
+    animation: modalSlideUp 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes modalSlideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.split-modal-header {
+    background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+    color: white;
+    padding: 20px 25px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 18px 18px 0 0;
+}
+.split-modal-header h2 {
+    font-size: 1.25em;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.split-modal-close {
+    background: rgba(255,255,255,0.2);
+    color: white;
+    border: none;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    font-size: 1.2em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.split-modal-close:hover { background: rgba(255,255,255,0.3); }
+.split-modal-body { padding: 20px 25px; }
+.split-modal-info {
+    padding: 14px 16px;
+    background: #f8fafc;
+    border-left: 4px solid #7c3aed;
+    border-radius: 8px;
+    margin-bottom: 18px;
+}
+.split-modal-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.split-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: #faf5ff;
+    border: 1px solid #e9d5ff;
+    border-radius: 10px;
+}
+.split-row input {
+    padding: 8px 10px;
+    border: 1.5px solid #c7d2fe;
+    border-radius: 6px;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 1em;
+    background: white;
+    text-align: center;
+}
+.split-row input:focus {
+    outline: none;
+    border-color: #7c3aed;
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+}
+.split-n { width: 70px; }
+.split-largo { width: 110px; }
+.split-x, .split-eq { color: #64748b; font-weight: 700; }
+.split-unit { color: #64748b; font-size: 0.9em; }
+.split-subtotal {
+    font-weight: 700;
+    color: #1e40af;
+    font-variant-numeric: tabular-nums;
+    min-width: 110px;
+    text-align: right;
+}
+.split-remove {
+    background: transparent;
+    color: #dc2626;
+    border: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 0.95em;
+    margin-left: auto;
+}
+.split-remove:hover { background: #fee2e2; }
+.split-add-btn {
+    background: transparent;
+    color: #7c3aed;
+    border: 2px dashed #c4b5fd;
+    padding: 10px;
+    border-radius: 10px;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    transition: all 0.15s;
+}
+.split-add-btn:hover {
+    background: #faf5ff;
+    border-color: #7c3aed;
+    border-style: solid;
+}
+.split-status {
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.9em;
+    font-weight: 600;
+    margin-top: 10px;
+}
+.split-status.ok { background: #dcfce7; color: #166534; }
+.split-status.error { background: #fee2e2; color: #991b1b; }
+.split-status.warn { background: #fef3c7; color: #92400e; }
+.split-status.info { background: #e0e7ff; color: #3730a3; }
+.split-modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    padding: 18px 25px;
+    border-top: 1px solid #e2e8f0;
+    background: #f8fafc;
+    border-radius: 0 0 18px 18px;
+}
+.split-modal-actions .btn { padding: 10px 20px; }
+.split-modal-actions .btn-apply {
+    background: #16a34a;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+.split-modal-actions .btn-apply:hover:not(:disabled) { background: #15803d; }
+.split-modal-actions .btn-apply:disabled {
+    background: #94a3b8;
+    cursor: not-allowed;
+}
+.actions-bar {
+    display: flex; gap: 10px; flex-wrap: wrap;
+    padding: 15px; background: #f8fafc; border-radius: 10px;
+    margin-top: 15px;
+}
+.empty-state {
+    text-align: center; padding: 40px 20px; color: #94a3b8;
+}
+.toast {
+    position: fixed; bottom: 25px; right: 25px;
+    padding: 14px 20px; background: #16a34a; color: white;
+    border-radius: 10px; font-weight: 600;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    transform: translateY(100px); opacity: 0;
+    transition: all 0.3s;
+    z-index: 100;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.error { background: #dc2626; }
+.spinner {
+    display: inline-block;
+    width: 18px; height: 18px;
+    border: 2.5px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.filter-bar {
+    display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;
+    align-items: center;
+}
+.filter-bar input, .filter-bar select {
+    padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px;
+    font-family: inherit; font-size: 0.88em;
+}
+.filter-bar input { flex: 1; min-width: 200px; }
+input[type="number"].qty {
+    width: 70px; padding: 4px 6px;
+    border: 1px solid #cbd5e1; border-radius: 4px;
+    font-family: inherit; text-align: right;
+}
+
+.pwa-home-btn {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    z-index: 200;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: #1e40af;
+    padding: 8px 14px;
+    border-radius: 10px;
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-weight: 700;
+    font-size: 0.85em;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    transition: all 0.2s;
+}
+.pwa-home-btn:hover {
+    background: white;
+    box-shadow: 0 6px 20px rgba(29, 78, 216, 0.2);
+    transform: translateY(-1px);
+}
+@media (max-width: 600px) {
+    .pwa-home-btn { top: 10px; left: 10px; padding: 6px 10px; font-size: 0.8em; }
+}
+</style>
+</head>
+<body>
+<a href="index.html" class="pwa-home-btn" title="Voltar ao menu">← Menu</a>
+<div class="container">
+    <div class="header">
+        <h1>🔄 Conversor OT → Otimizador de Racks</h1>
+        <p>Extrai matriz de produtos de Ordens de Trabalho (PDF) e gera Excel para o otimizador</p>
+    </div>
+
+    <div class="card" id="configCard">
+        <h2>⚙️ 1. Limites físicos da madeira <span style="font-size:0.7em; color:#64748b; font-weight:500;">(guardados automaticamente)</span></h2>
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:15px;">
+            <div style="padding:15px; background:#fef3c7; border:1px solid #fde68a; border-radius:10px;">
+                <div style="font-weight:700; color:#92400e; margin-bottom:8px;">🧱 Barrote máximo</div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <input type="number" id="limitBarrote" value="4450" min="500" step="50"
+                           style="flex:1; padding:8px 10px; border:1px solid #fbbf24; border-radius:6px; font-size:1em; font-weight:600;"
+                           onchange="updateLimit('barrote', this.value)">
+                    <span style="color:#78350f; font-weight:600;">mm</span>
+                </div>
+            </div>
+            <div style="padding:15px; background:#fef3c7; border:1px solid #fde68a; border-radius:10px;">
+                <div style="font-weight:700; color:#92400e; margin-bottom:8px;">🪵 Tábua máxima</div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <input type="number" id="limitTabua" value="4950" min="500" step="50"
+                           style="flex:1; padding:8px 10px; border:1px solid #fbbf24; border-radius:6px; font-size:1em; font-weight:600;"
+                           onchange="updateLimit('tabua', this.value)">
+                    <span style="color:#78350f; font-weight:600;">mm</span>
+                </div>
+            </div>
+            <div style="padding:15px; background:#e0e7ff; border:1px solid #c7d2fe; border-radius:10px;">
+                <div style="font-weight:700; color:#3730a3; margin-bottom:8px;">📋 Tabuleiro</div>
+                <div style="padding:8px 10px; color:#4338ca; font-style:italic;">sem limite</div>
+            </div>
+        </div>
+        <p style="font-size:0.85em; color:#64748b; margin-top:10px;">
+            💡 Peças que excedam estes limites mostrarão o botão <span style="background:#7c3aed;color:white;padding:2px 8px;border-radius:4px;font-weight:700;">✂️ corte</span> com a proposta de divisão (máximo + resto).
+        </p>
+    </div>
+
+    <div class="card">
+        <h2>📎 2. Carregar OT em PDF</h2>
+        <label class="upload-zone" id="uploadZone">
+            <input type="file" id="pdfInput" accept=".pdf">
+            <div class="icon">📄</div>
+            <div id="uploadLabel" style="font-weight: 600; color: #1e40af;">Clique ou arraste um PDF aqui</div>
+            <div class="hint">OT da Arechaederra ou outro formato semelhante</div>
+        </label>
+        <div id="processingMsg" style="display:none; margin-top: 15px; padding: 12px; background: #eff6ff; border-radius: 8px; color: #1e40af; font-weight: 600;">
+            <span class="spinner" style="border-color: rgba(59,130,246,0.3); border-top-color: #3b82f6;"></span>
+            A processar PDF...
+        </div>
+    </div>
+
+    <div id="resultsSection" style="display:none;">
+        <div class="card">
+            <h2>📋 3. Informação da OT</h2>
+            <div class="ot-info" id="otInfo"></div>
+            <div class="stats-row" id="statsRow"></div>
+        </div>
+
+        <div class="card">
+            <h2>🗂️ 4. Matriz de Produtos <span id="lineCounter" style="font-size: 0.75em; color: #64748b; font-weight: 500; margin-left: 8px;"></span></h2>
+            <div class="filter-bar">
+                <input type="text" id="searchInput" placeholder="🔍 Pesquisar nome...">
+                <select id="catFilter">
+                    <option value="">Todas categorias</option>
+                    <option value="tabuleiro">Só tabuleiros</option>
+                    <option value="tabua">Só tábuas</option>
+                    <option value="barrote">Só barrotes</option>
+                </select>
+                <select id="sizeFilter">
+                    <option value="">Todos tamanhos</option>
+                    <option value="exceedLimit">Só acima do limite madeira</option>
+                    <option value="oversize">Só sobredimensão (>1260mm)</option>
+                    <option value="normal">Só dentro do rack</option>
+                </select>
+                <button class="btn btn-sm" onclick="dividirTodas()" style="background:#7c3aed; color:white;">✂️ Dividir todas &gt; limite</button>
+            </div>
+            <div class="table-wrap">
+                <table class="preview" id="previewTable">
+                    <thead>
+                        <tr>
+                            <th style="width:40px;">#</th>
+                            <th>Nome (MADERA)</th>
+                            <th style="width:80px; text-align:right;">LARGO</th>
+                            <th style="width:80px; text-align:right;">ANCHO</th>
+                            <th style="width:70px; text-align:right;">ALTO</th>
+                            <th style="width:80px; text-align:right;">CANT</th>
+                            <th style="width:130px;">Categoria</th>
+                            <th style="width:100px;">Aviso</th>
+                            <th style="width:50px;">⚙️</th>
+                        </tr>
+                    </thead>
+                    <tbody id="previewBody"></tbody>
+                </table>
+            </div>
+            <div class="actions-bar">
+                <button class="btn btn-success" onclick="exportExcel()" id="btnExcel">
+                    📊 Exportar Excel (formato otimizador)
+                </button>
+                <button class="btn btn-primary" onclick="exportJSON()">
+                    💾 Exportar JSON
+                </button>
+                <button class="btn btn-ghost" onclick="showRawText()">
+                    📝 Ver texto extraído (debug)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" id="rawTextCard" style="display:none;">
+        <h2>📝 Texto extraído do PDF</h2>
+        <textarea id="rawText" style="width:100%; height:300px; font-family: monospace; font-size: 0.8em; padding:10px; border:1px solid #cbd5e1; border-radius:6px;"></textarea>
+    </div>
+</div>
+
+<!-- Modal de divisão de tabuleiro -->
+<div class="split-modal-overlay" id="splitModal">
+    <div class="split-modal-box">
+        <div class="split-modal-header">
+            <h2>✂️ Dividir Tabuleiro</h2>
+            <button class="split-modal-close" onclick="fecharModalDivisao()" title="Fechar">×</button>
+        </div>
+        <div class="split-modal-body">
+            <div class="split-modal-info" id="splitModalInfo"></div>
+            
+            <div style="font-weight:700; color:#1e40af; margin-bottom:10px;">📐 Como dividir:</div>
+            <div class="split-modal-rows" id="splitModalRows"></div>
+            
+            <button class="split-add-btn" onclick="adicionarParte()">
+                ➕ Adicionar linha de corte
+            </button>
+            
+            <div id="splitModalStatus"></div>
+        </div>
+        <div class="split-modal-actions">
+            <button class="btn btn-ghost" onclick="fecharModalDivisao()">Cancelar</button>
+            <button class="btn-apply" id="btnAplicarDivisao" onclick="aplicarDivisao()">✓ Aplicar divisão</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let products = [];
+let otMeta = {};
+let rawPdfText = '';
+
+// Limites físicos de comprimento da madeira em armazém (mm)
+// Usados APENAS para sinalizar peças que os excedem — a divisão é manual
+const LIMITS = {
+    tabuleiro: Infinity,
+    tabua: 4950,
+    barrote: 4450
+};
+
+// =============================================================================
+// PARSING
+// =============================================================================
+
+// Converte "19.034" → 19034 (separador de milhares espanhol)
+function parseESNumber(str) {
+    if (typeof str === 'number') return str;
+    const s = String(str).trim();
+    // Se tem ponto seguido de exatamente 3 dígitos, trata como milhares
+    if (/^\d{1,3}(\.\d{3})+$/.test(s)) {
+        return parseInt(s.replace(/\./g, ''));
+    }
+    // Caso contrário, trata normal (sem ponto de milhares)
+    return parseInt(s.replace(/\./g, ''));
+}
+
+// Regex: nome + CANT + LARGO + ANCHO + ALTO + TOTAL
+// Os 2 últimos são inteiros (CANT e TOTAL ao fim),
+// os 2 do meio podem ter ponto (LARGO/ANCHO),
+// ALTO é inteiro.
+const LINE_REGEX = /^(.+?)\s+(\d+)\s+([\d.]+)\s+([\d.]+)\s+(\d+)\s+(\d+)$/;
+
+// Categorização automática
+function categorize(ancho, alto) {
+    if (alto <= 20 && ancho >= 200) return 'tabuleiro';
+    if (alto <= 30 && ancho < 200) return 'tabua';
+    if (alto >= 30) return 'barrote';
+    return 'tabuleiro'; // fallback
+}
+
+// Detecta cabeçalhos de secção para saber onde estamos
+function detectSection(line) {
+    const u = line.toUpperCase();
+    if (u.includes('MADERA') && u.includes('CANT') && u.includes('LARGO')) return 'madera';
+    if (u.includes('MATERIAL VARIOS')) return 'varios';
+    if (u.includes('SUBCONTRATACIONES')) return 'subcon';
+    return null;
+}
+
+// Extrai metadata da OT (número, unidades, descrição)
+function extractOTMeta(text) {
+    const meta = {};
+    const otMatch = text.match(/OT[:\s]+(\d{4,7})/i);
+    if (otMatch) meta.ot = otMatch[1];
+    const unidadesMatch = text.match(/Unidades\s+(\d+)/i);
+    if (unidadesMatch) meta.unidades = parseInt(unidadesMatch[1]);
+    const nomeMatch = text.match(/Nombre\s+([A-Z][A-Z\s,.()\-]+?)(?:Embalado|Centro|$)/);
+    if (nomeMatch) meta.cliente = nomeMatch[1].trim();
+    const descMatch = text.match(/Descripcion\s+(.+?)(?:ud tot|Cubic|$)/i);
+    if (descMatch) meta.descricao = descMatch[1].trim().substring(0, 80);
+    const fechaMatch = text.match(/Fecha[:\s]+(\d{2}[-/]\d{2}[-/]\d{2,4})/i);
+    if (fechaMatch) meta.fecha = fechaMatch[1];
+    return meta;
+}
+
+function parsePDFText(fullText) {
+    const lines = fullText.split('\n').map(l => l.trim()).filter(l => l);
+    const produtos = [];
+    let currentSection = null;
+    let idxLinha = 0;
+    for (const line of lines) {
+        // Verifica mudança de secção
+        const newSection = detectSection(line);
+        if (newSection) {
+            currentSection = newSection;
+            continue;
+        }
+        
+        // Só processa linhas da secção MADERA
+        if (currentSection !== 'madera') continue;
+        
+        const m = line.match(LINE_REGEX);
+        if (!m) continue;
+        
+        const [, nomeRaw, cant, largo, ancho, alto, total] = m;
+        const nome = nomeRaw.trim();
+        
+        // Validação: não deve começar com maiúsculas iniciais de cabeçalho
+        if (nome === 'MADERA' || nome === 'CANT' || nome.length < 2) continue;
+        
+        const largoN = parseESNumber(largo);
+        const anchoN = parseESNumber(ancho);
+        const altoN = parseInt(alto);
+        const cantN = parseInt(cant);
+        
+        // Filtros básicos de validação
+        if (largoN <= 0 || anchoN <= 0 || altoN <= 0 || cantN <= 0) continue;
+        if (largoN > 100000) continue; // improvável em mm
+        
+        idxLinha++;
+        const cat = categorize(anchoN, altoN);
+        produtos.push({
+            id: idxLinha,
+            referencia: `${otMeta.ot || 'OT'}_L${String(idxLinha).padStart(3, '0')}`,
+            nome: nome,
+            largo: largoN,
+            cant: cantN,
+            ancho: anchoN,
+            alto: altoN,
+            total: parseInt(total),
+            categoria: cat,
+            incluir: true
+        });
+    }
+    
+    return produtos;
+}
+
+// =============================================================================
+// PDF HANDLING
+// =============================================================================
+
+document.getElementById('pdfInput').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    document.getElementById('uploadLabel').textContent = '📄 ' + file.name;
+    document.getElementById('uploadZone').classList.add('has-file');
+    document.getElementById('processingMsg').style.display = 'block';
+    
+    try {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+        
+        let fullText = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+            
+            // Reconstruir linhas usando posição Y dos items
+            const items = content.items;
+            const byY = {};
+            items.forEach(it => {
+                const y = Math.round(it.transform[5]);
+                if (!byY[y]) byY[y] = [];
+                byY[y].push({x: it.transform[4], str: it.str});
+            });
+            
+            const ys = Object.keys(byY).map(Number).sort((a,b) => b-a);
+            for (const y of ys) {
+                const lineItems = byY[y].sort((a,b) => a.x - b.x);
+                const lineText = lineItems.map(i => i.str).join(' ').replace(/\s+/g, ' ').trim();
+                if (lineText) fullText += lineText + '\n';
+            }
+            fullText += '\n';
+        }
+        
+        rawPdfText = fullText;
+        otMeta = extractOTMeta(fullText);
+        products = parsePDFText(fullText);
+        
+        document.getElementById('processingMsg').style.display = 'none';
+        
+        if (products.length === 0) {
+            toast('Nenhum produto encontrado. Verifique o texto extraído (botão debug).', 'error');
+            document.getElementById('resultsSection').style.display = 'block';
+            document.getElementById('rawTextCard').style.display = 'block';
+            document.getElementById('rawText').value = fullText;
+        } else {
+            toast(`✅ ${products.length} produtos extraídos`);
+        }
+        
+        renderAll();
+    } catch (err) {
+        console.error(err);
+        document.getElementById('processingMsg').style.display = 'none';
+        toast('Erro ao processar PDF: ' + err.message, 'error');
+    }
+});
+
+// =============================================================================
+// RENDERING
+// =============================================================================
+
+function renderAll() {
+    document.getElementById('resultsSection').style.display = 'block';
+    renderOTInfo();
+    renderStats();
+    renderTable();
+}
+
+function renderOTInfo() {
+    const info = document.getElementById('otInfo');
+    const items = [
+        ['OT', otMeta.ot || '—'],
+        ['Unidades', otMeta.unidades || '—'],
+        ['Cliente', otMeta.cliente || '—'],
+        ['Data', otMeta.fecha || '—'],
+        ['Descrição', otMeta.descricao || '—']
+    ];
+    info.innerHTML = items.map(([lbl, val]) => `
+        <div class="info-cell">
+            <div class="lbl">${lbl}</div>
+            <div class="val">${val}</div>
+        </div>
+    `).join('');
+}
+
+function renderStats() {
+    const incluir = products.filter(p => p.incluir);
+    const byCat = {tabuleiro: 0, tabua: 0, barrote: 0};
+    let oversize = 0, exceedeLimit = 0, totalPecas = 0;
+    incluir.forEach(p => {
+        byCat[p.categoria] = (byCat[p.categoria] || 0) + 1;
+        totalPecas += p.cant;
+        if (p.largo > 1260 || p.ancho > 810) oversize++;
+        if (isFinite(LIMITS[p.categoria]) && p.largo > LIMITS[p.categoria]) exceedeLimit++;
+    });
+    
+    const row = document.getElementById('statsRow');
+    row.innerHTML = `
+        <span class="stat-chip">📦 ${incluir.length} linhas / ${totalPecas} peças</span>
+        <span class="stat-chip tabuleiro">📋 Tabuleiros: ${byCat.tabuleiro}</span>
+        <span class="stat-chip tabua">🪵 Tábuas: ${byCat.tabua}</span>
+        <span class="stat-chip barrote">🧱 Barrotes: ${byCat.barrote}</span>
+        ${exceedeLimit > 0 ? `<span class="stat-chip warn">⚠️ ${exceedeLimit} excede limite da madeira</span>` : ''}
+        ${oversize > 0 ? `<span class="stat-chip warn">📏 ${oversize} sobre-dimensão rack</span>` : ''}
+    `;
+}
+
+function getFiltered() {
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    const catFilter = document.getElementById('catFilter').value;
+    const sizeFilter = document.getElementById('sizeFilter').value;
+    
+    return products.filter(p => {
+        if (search && !p.nome.toLowerCase().includes(search)) return false;
+        if (catFilter && p.categoria !== catFilter) return false;
+        if (sizeFilter === 'oversize' && p.largo <= 1260 && p.ancho <= 810) return false;
+        if (sizeFilter === 'normal' && (p.largo > 1260 || p.ancho > 810)) return false;
+        if (sizeFilter === 'exceedLimit') {
+            const lim = LIMITS[p.categoria];
+            if (!isFinite(lim) || p.largo <= lim) return false;
+        }
+        return true;
+    });
+}
+
+function renderTable() {
+    const tbody = document.getElementById('previewBody');
+    const filtered = getFiltered();
+    document.getElementById('lineCounter').textContent = `(${filtered.length} de ${products.length})`;
+    
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Nenhum produto corresponde aos filtros</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = filtered.map(p => {
+        const oversize = p.largo > 1260 || p.ancho > 810;
+        const limite = LIMITS[p.categoria];
+        const excedeLimite = isFinite(limite) && p.largo > limite;
+        const ehSubpeca = !!p._parent;
+        
+        const rowClass = [
+            !p.incluir ? 'excluded' : '',
+            excedeLimite ? 'exceed-limit' : (oversize ? 'oversize' : ''),
+            ehSubpeca ? 'subpeca' : ''
+        ].filter(Boolean).join(' ');
+        
+        // Nome da peça: sub-peças mostram origem
+        const nomeCell = ehSubpeca
+            ? `<div style="font-weight:600;">${p.nome}</div>
+               <div style="font-size:0.75em; color:#7c3aed; font-weight:500;">↳ parte de ${p._origLargo}mm × ${p._origCant}</div>`
+            : `<span style="font-weight:600;">${p.nome}</span>`;
+        
+        // Avisos + botão de divisão
+        // Tabuleiros: sempre disponível modal editável (decisão de corte manual)
+        // Barrotes/Tábuas: botão com proposta automática só quando excede limite
+        let aviso = '';
+        if (p.categoria === 'tabuleiro') {
+            // Botão editável sempre disponível (exceto em sub-peças já cortadas)
+            if (!ehSubpeca) {
+                aviso += `<button class="btn-split" onclick="abrirModalDivisao(${p.id})" title="Dividir tabuleiro em cortes personalizados">✂️ Dividir</button>`;
+            }
+            if (oversize) aviso += ' <span class="badge badge-warn" title="Excede dimensões do rack">&gt; rack</span>';
+        } else {
+            // Barrotes / tábuas: divisão automática quando excede limite
+            if (excedeLimite) {
+                const proposta = proporDivisao(p.largo, p.categoria);
+                const propostaText = formatarProposta(proposta);
+                aviso += `<span class="badge badge-limit" title="Limite ${limite}mm">⚠️ &gt; ${limite}mm</span> `;
+                aviso += `<button class="btn-split" onclick="dividirPeca(${p.id})" title="Propor: ${propostaText}">✂️ ${propostaText}</button>`;
+            } else if (oversize) {
+                aviso += '<span class="badge badge-warn">&gt; rack</span>';
+            }
+        }
+        
+        return `
+        <tr class="${rowClass}" data-id="${p.id}">
+            <td><input type="checkbox" ${p.incluir ? 'checked' : ''} onchange="toggleInclude(${p.id}, this.checked)"></td>
+            <td style="color:#94a3b8; font-size:0.85em;">${p.id}</td>
+            <td>${nomeCell}</td>
+            <td>
+                <input type="number" class="qty dim" value="${p.largo}" min="1"
+                       onchange="updateLargo(${p.id}, this.value)"
+                       style="width:90px; text-align:right;">
+            </td>
+            <td style="text-align:right; font-variant-numeric: tabular-nums;">${p.ancho.toLocaleString('pt-PT')}</td>
+            <td style="text-align:right; font-variant-numeric: tabular-nums;">${p.alto}</td>
+            <td>
+                <input type="number" class="qty" value="${p.cant}" min="1"
+                       onchange="updateCant(${p.id}, this.value)">
+            </td>
+            <td>
+                <select class="cat ${p.categoria}" onchange="updateCategoria(${p.id}, this.value)">
+                    <option value="tabuleiro" ${p.categoria==='tabuleiro'?'selected':''}>📋 Tabuleiro</option>
+                    <option value="tabua" ${p.categoria==='tabua'?'selected':''}>🪵 Tábua</option>
+                    <option value="barrote" ${p.categoria==='barrote'?'selected':''}>🧱 Barrote</option>
+                </select>
+            </td>
+            <td>${aviso}</td>
+        </tr>
+        `;
+    }).join('');
+}
+
+function toggleInclude(id, val) {
+    const p = products.find(x => x.id === id);
+    if (p) { p.incluir = val; renderStats(); renderTable(); }
+}
+function updateCategoria(id, val) {
+    const p = products.find(x => x.id === id);
+    if (p) { p.categoria = val; renderStats(); renderTable(); }
+}
+function updateCant(id, val) {
+    const p = products.find(x => x.id === id);
+    const n = parseInt(val);
+    if (p && n > 0) { p.cant = n; renderStats(); }
+}
+function updateLargo(id, val) {
+    const p = products.find(x => x.id === id);
+    const n = parseInt(val);
+    if (p && n > 0) { p.largo = n; renderStats(); renderTable(); }
+}
+function selectAll(incluir) {
+    getFiltered().forEach(p => { p.incluir = incluir; });
+    renderStats(); renderTable();
+}
+
+function updateLimit(cat, val) {
+    const n = parseInt(val);
+    if (n > 0) {
+        LIMITS[cat] = n;
+        saveLimits();
+        renderStats();
+        renderTable();
+    }
+}
+
+// Persistência dos limites entre sessões
+const STORAGE_KEY = 'ot-converter-limits';
+
+function saveLimits() {
+    try {
+        const toSave = { barrote: LIMITS.barrote, tabua: LIMITS.tabua };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+    } catch (e) {
+        // localStorage pode falhar em modo incógnito — ignora
+    }
+}
+
+function loadLimits() {
+    try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (!saved) return;
+        const parsed = JSON.parse(saved);
+        if (parsed.barrote > 0) {
+            LIMITS.barrote = parsed.barrote;
+            const input = document.getElementById('limitBarrote');
+            if (input) input.value = parsed.barrote;
+        }
+        if (parsed.tabua > 0) {
+            LIMITS.tabua = parsed.tabua;
+            const input = document.getElementById('limitTabua');
+            if (input) input.value = parsed.tabua;
+        }
+    } catch (e) {
+        // ignora erros de parsing
+    }
+}
+
+// Carregar ao iniciar
+document.addEventListener('DOMContentLoaded', loadLimits);
+
+// Propõe divisão em máximos + resto: floor(largo/max) peças de "max" + 1 de "resto"
+// Retorna null se a peça não precisa divisão
+function proporDivisao(largo, categoria) {
+    const max = LIMITS[categoria];
+    if (!isFinite(max) || largo <= max) return null;
+    const nMaximos = Math.floor(largo / max);
+    const resto = largo - (nMaximos * max);
+    const partes = [];
+    if (nMaximos > 0) partes.push({ largo: max, n: nMaximos });
+    if (resto > 0) partes.push({ largo: resto, n: 1 });
+    return partes;
+}
+
+// Texto humano da proposta, ex: "4×4450 + 1×1234"
+function formatarProposta(partes) {
+    return partes.map(p => `${p.n}×${p.largo}`).join(' + ');
+}
+
+// ============================================================================
+// MODAL EDITÁVEL (só para tabuleiros — operador define exactamente o corte)
+// ============================================================================
+let splitModal = { productId: null, partes: [] };
+
+function abrirModalDivisao(id) {
+    const p = products.find(x => x.id === id);
+    if (!p) return;
+    splitModal.productId = id;
+    // Começa com uma única linha igual ao LARGO original
+    splitModal.partes = [{ n: 1, largo: p.largo }];
+    renderModalDivisao();
+    document.getElementById('splitModal').classList.add('show');
+}
+
+function fecharModalDivisao() {
+    document.getElementById('splitModal').classList.remove('show');
+    splitModal = { productId: null, partes: [] };
+}
+
+function renderModalDivisao() {
+    const p = products.find(x => x.id === splitModal.productId);
+    if (!p) return;
+    
+    document.getElementById('splitModalInfo').innerHTML = `
+        <div style="font-size:0.85em; color:#64748b;">Dividir tabuleiro</div>
+        <div style="font-weight:700; font-size:1.15em; color:#1e40af; margin-top:2px;">${p.nome}</div>
+        <div style="display:flex; gap:18px; margin-top:10px; font-size:0.92em; flex-wrap:wrap;">
+            <span>📏 LARGO: <strong>${p.largo.toLocaleString('pt-PT')}mm</strong></span>
+            <span>ANCHO: <strong>${p.ancho}mm</strong></span>
+            <span>ALTO: <strong>${p.alto}mm</strong></span>
+            <span>CANT: <strong>×${p.cant}</strong></span>
+        </div>
+    `;
+    
+    let rowsHtml = '';
+    splitModal.partes.forEach((parte, idx) => {
+        rowsHtml += `
+            <div class="split-row">
+                <input type="number" class="split-n" min="1" value="${parte.n}" 
+                       onchange="atualizarParte(${idx}, 'n', this.value)"
+                       onfocus="this.select()">
+                <span class="split-x">×</span>
+                <input type="number" class="split-largo" min="1" value="${parte.largo}" 
+                       onchange="atualizarParte(${idx}, 'largo', this.value)"
+                       onfocus="this.select()"
+                       placeholder="comprimento">
+                <span class="split-unit">mm</span>
+                <span class="split-eq">=</span>
+                <span class="split-subtotal">${(parte.n * parte.largo).toLocaleString('pt-PT')} mm</span>
+                <button class="split-remove" onclick="removerParte(${idx})" title="Remover linha">✕</button>
+            </div>
+        `;
+    });
+    document.getElementById('splitModalRows').innerHTML = rowsHtml;
+    
+    const total = splitModal.partes.reduce((s, pt) => s + (pt.n * pt.largo), 0);
+    const diff = total - p.largo;
+    const totalPecas = splitModal.partes.reduce((s, pt) => s + (pt.n * p.cant), 0);
+    
+    let statusHtml;
+    if (diff === 0) {
+        statusHtml = `<div class="split-status ok">✓ Soma ${total.toLocaleString('pt-PT')}mm bate com o LARGO original</div>`;
+    } else if (diff > 0) {
+        statusHtml = `<div class="split-status error">⚠️ Soma (${total.toLocaleString('pt-PT')}mm) excede original em ${diff.toLocaleString('pt-PT')}mm</div>`;
+    } else {
+        statusHtml = `<div class="split-status warn">ℹ️ Soma ${total.toLocaleString('pt-PT')}mm é inferior ao original — ${Math.abs(diff).toLocaleString('pt-PT')}mm de sobra/desperdício</div>`;
+    }
+    statusHtml += `<div class="split-status info">📦 Resultado: ${splitModal.partes.filter(pt=>pt.n>0&&pt.largo>0).map(pt => `<strong>${pt.n * p.cant}×${pt.largo}mm</strong>`).join(' + ')} = ${totalPecas} peças físicas</div>`;
+    
+    document.getElementById('splitModalStatus').innerHTML = statusHtml;
+    document.getElementById('btnAplicarDivisao').disabled = splitModal.partes.length === 0 || splitModal.partes.some(pt => pt.n <= 0 || pt.largo <= 0);
+}
+
+function atualizarParte(idx, campo, valor) {
+    const n = parseInt(valor);
+    if (n > 0) { splitModal.partes[idx][campo] = n; renderModalDivisao(); }
+}
+
+function adicionarParte() {
+    splitModal.partes.push({ n: 1, largo: 0 });
+    renderModalDivisao();
+    setTimeout(() => {
+        const rows = document.querySelectorAll('.split-largo');
+        if (rows.length) rows[rows.length - 1].focus();
+    }, 50);
+}
+
+function removerParte(idx) {
+    if (splitModal.partes.length <= 1) {
+        toast('Tem de ficar pelo menos uma linha', 'error');
+        return;
+    }
+    splitModal.partes.splice(idx, 1);
+    renderModalDivisao();
+}
+
+function aplicarDivisao() {
+    const idx = products.findIndex(p => p.id === splitModal.productId);
+    if (idx === -1) return;
+    const p = products[idx];
+    const partes = splitModal.partes.filter(pt => pt.n > 0 && pt.largo > 0);
+    if (partes.length === 0) return;
+    
+    const total = partes.reduce((s, pt) => s + (pt.n * pt.largo), 0);
+    const diff = total - p.largo;
+    if (diff > 0 && !confirm(`A soma (${total}mm) excede o LARGO original (${p.largo}mm) em ${diff}mm. Aplicar?`)) return;
+    if (diff < 0 && !confirm(`A soma (${total}mm) é inferior ao original. ${Math.abs(diff)}mm serão desperdício. Aplicar?`)) return;
+    
+    const maxId = Math.max(...products.map(x => x.id));
+    const novos = partes.map((parte, i) => ({
+        id: maxId + 1 + i,
+        referencia: p.referencia + `_p${i+1}`,
+        nome: p.nome,
+        largo: parte.largo,
+        cant: parte.n * p.cant,
+        ancho: p.ancho,
+        alto: p.alto,
+        total: p.total,
+        categoria: p.categoria,
+        incluir: p.incluir,
+        _parent: p.referencia,
+        _origLargo: p.largo,
+        _origCant: p.cant
+    }));
+    
+    products.splice(idx, 1, ...novos);
+    fecharModalDivisao();
+    renderStats();
+    renderTable();
+    toast(`✂️ ${p.nome}: ${partes.map(pt => `${pt.n}×${pt.largo}`).join(' + ')}`);
+}
+
+function dividirPeca(id) {
+    const idx = products.findIndex(p => p.id === id);
+    if (idx === -1) return;
+    const p = products[idx];
+    const partes = proporDivisao(p.largo, p.categoria);
+    if (!partes) return;
+    
+    const maxId = Math.max(...products.map(x => x.id));
+    const novos = partes.map((parte, i) => ({
+        id: maxId + 1 + i,
+        referencia: p.referencia + `_p${i+1}`,
+        nome: p.nome,
+        largo: parte.largo,
+        cant: parte.n * p.cant,
+        ancho: p.ancho,
+        alto: p.alto,
+        total: p.total,
+        categoria: p.categoria,
+        incluir: p.incluir,
+        _parent: p.referencia,  // rastreabilidade
+        _origLargo: p.largo,    // comprimento original
+        _origCant: p.cant       // CANT original
+    }));
+    
+    products.splice(idx, 1, ...novos);
+    renderStats();
+    renderTable();
+    toast(`✂️ ${p.nome}: ${formatarProposta(partes)} (CANT original × ${p.cant})`);
+}
+
+function dividirTodas() {
+    const aDividir = products.filter(p => {
+        if (p.categoria === 'tabuleiro') return false;  // tabuleiros são sempre manuais
+        const lim = LIMITS[p.categoria];
+        return p.incluir && isFinite(lim) && p.largo > lim;
+    });
+    if (aDividir.length === 0) {
+        toast('Nenhum barrote/tábua acima do limite', 'error');
+        return;
+    }
+    if (!confirm(`Aplicar divisão automática (máximo + resto) a ${aDividir.length} barrote(s)/tábua(s)?\n\nExemplo: 19034mm (barrote) → 4×4450 + 1×1234\n\nTabuleiros são sempre divididos manualmente.`)) return;
+    
+    aDividir.forEach(p => {
+        const stillExists = products.find(x => x.id === p.id);
+        if (stillExists) dividirPeca(p.id);
+    });
+}
+
+['searchInput', 'catFilter', 'sizeFilter'].forEach(id => {
+    document.getElementById(id).addEventListener('input', renderTable);
+});
+
+// =============================================================================
+// EXPORT
+// =============================================================================
+
+function exportExcel() {
+    const incluir = products.filter(p => p.incluir);
+    if (incluir.length === 0) return toast('Nenhum produto selecionado', 'error');
+    
+    const excedeLimite = incluir.filter(p => isFinite(LIMITS[p.categoria]) && p.largo > LIMITS[p.categoria]);
+    if (excedeLimite.length > 0) {
+        const confirmar = confirm(
+            `⚠️ Atenção: ${excedeLimite.length} peça(s) excedem o limite físico da madeira.\n\n` +
+            `Exemplos:\n${excedeLimite.slice(0,3).map(p => `• ${p.nome}: ${p.largo}mm (limite ${LIMITS[p.categoria]}mm)`).join('\n')}` +
+            (excedeLimite.length > 3 ? `\n... e mais ${excedeLimite.length - 3}` : '') +
+            `\n\nPrefere rever antes de exportar?\n\nOK = Rever (cancelar exportação)\nCancelar = Exportar mesmo assim`
+        );
+        if (confirmar) return;
+    }
+    
+    const rows = incluir.map(p => ({
+        'Referencia': p.referencia,
+        'Categoria': p.categoria,
+        'Comprimento (mm)': p.largo,
+        'Profundidade(mm)': p.ancho,
+        'Espessura (mm)': p.alto,
+        'quantidade': p.cant,
+        'Nome Original': p.nome
+    }));
+    
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [
+        {wch: 16}, {wch: 11}, {wch: 15}, {wch: 15}, {wch: 14}, {wch: 12}, {wch: 30}
+    ];
+    
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Produtos');
+    
+    const metaRows = [
+        ['OT', otMeta.ot || ''],
+        ['Unidades', otMeta.unidades || ''],
+        ['Cliente', otMeta.cliente || ''],
+        ['Data', otMeta.fecha || ''],
+        ['Descrição', otMeta.descricao || ''],
+        ['', ''],
+        ['— Totais —', ''],
+        ['Linhas exportadas', incluir.length],
+        ['Total peças (CANT)', incluir.reduce((s,p) => s + p.cant, 0)],
+        ['Tabuleiros', incluir.filter(p => p.categoria==='tabuleiro').length],
+        ['Tábuas', incluir.filter(p => p.categoria==='tabua').length],
+        ['Barrotes', incluir.filter(p => p.categoria==='barrote').length],
+        ['Peças acima do limite madeira', excedeLimite.length],
+        ['', ''],
+        ['— Limites referência —', ''],
+        ['Máximo barrote (mm)', LIMITS.barrote],
+        ['Máximo tábua (mm)', LIMITS.tabua],
+        ['', ''],
+        ['Exportado em', new Date().toLocaleString('pt-PT')]
+    ];
+    const wsMeta = XLSX.utils.aoa_to_sheet(metaRows);
+    wsMeta['!cols'] = [{wch: 28}, {wch: 40}];
+    XLSX.utils.book_append_sheet(wb, wsMeta, 'Info OT');
+    
+    const filename = `OT_${otMeta.ot || 'converted'}_produtos.xlsx`;
+    XLSX.writeFile(wb, filename);
+    toast(`✅ ${filename} exportado`);
+}
+
+function exportJSON() {
+    const incluir = products.filter(p => p.incluir);
+    if (incluir.length === 0) return toast('Nenhum produto selecionado', 'error');
+    
+    const data = {
+        meta: otMeta,
+        limites_referencia: LIMITS,
+        produtos: incluir.map(p => ({
+            referencia: p.referencia,
+            categoria: p.categoria,
+            comprimento: p.largo,
+            profundidade: p.ancho,
+            espessura: p.alto,
+            quantidade: p.cant,
+            nome: p.nome
+        })),
+        exportado: new Date().toISOString()
+    };
+    
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `OT_${otMeta.ot || 'converted'}_produtos.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast(`✅ JSON exportado`);
+}
+
+function showRawText() {
+    const card = document.getElementById('rawTextCard');
+    card.style.display = card.style.display === 'none' ? 'block' : 'none';
+    document.getElementById('rawText').value = rawPdfText;
+}
+
+function toast(msg, type = 'success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast ' + (type === 'error' ? 'error' : '') + ' show';
+    setTimeout(() => t.classList.remove('show'), 3500);
+}
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(err => console.error('SW:', err));
+    });
+}
+</script>
+</body>
+</html>

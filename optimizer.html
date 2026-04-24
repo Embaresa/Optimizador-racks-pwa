@@ -666,7 +666,7 @@
 <a href="index.html" class="pwa-home-btn" title="Voltar ao menu">← Menu</a>
     <div class="container">
         <div class="header">
-            <h1>🗂️ Otimizador de Racks <span id="versionBadge" style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v34</span></h1>
+            <h1>🗂️ Otimizador de Racks <span id="versionBadge" style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v39</span></h1>
             <p>Sistema Inteligente de Organização de Material</p>
         </div>
         
@@ -736,6 +736,10 @@
                     <option value="barrote">Barrotes</option>
                 </select>
                 <button class="btn btn-primary" onclick="clearFilters()">Limpar Filtros</button>
+                <button class="btn" onclick="toggleStepsMode()" id="enableStepsBtn"
+                        style="background:#fbbf24; color:#78350f; font-weight:700;">
+                    📋 Ativar Passos de Produção
+                </button>
             </div>
             
             <div class="table-wrapper">
@@ -751,6 +755,7 @@
                                 <th>Quantidade</th>
                                 <th>Multiplicador</th>
                                 <th>Total</th>
+                                <th style="background:#fef3c7;">📋 Passo</th>
                             </tr>
                         </thead>
                         <tbody id="productTableBody"></tbody>
@@ -759,6 +764,30 @@
             </div>
             
             <div class="selected-count" id="selectedCount">0 produtos</div>
+            
+            <!-- Controlos Passo de Produção (v38) -->
+            <div id="stepsControls" style="display:none; background:#fef3c7; border:1px solid #f59e0b; border-radius:12px; padding:16px; margin:16px 0;">
+                <div style="font-weight:700; color:#92400e; margin-bottom:10px;">📋 Passos de Produção</div>
+                <div style="font-size:0.9em; color:#78350f; margin-bottom:12px;">
+                    Cada peça pertence a um passo: <strong>1. Base</strong> ou <strong>2. Laterais+Tampa</strong>.
+                    Peças longas (≥4m) consolidam-se em racks próprios globais.
+                </div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+                    <button class="btn-secondary" onclick="autoAssignSteps()" style="background:#fbbf24; color:#78350f;">
+                        ✨ Auto-Atribuir por Nome
+                    </button>
+                    <button class="btn-secondary" onclick="assignAllToStep('base')" style="background:#fca5a5;">
+                        Tudo → Base
+                    </button>
+                    <button class="btn-secondary" onclick="assignAllToStep('lattampa')" style="background:#fcd34d;">
+                        Tudo → Laterais+Tampa
+                    </button>
+                    <button class="btn-secondary" onclick="toggleStepsMode()" id="toggleStepsBtn">
+                        ❌ Desativar Passos
+                    </button>
+                </div>
+                <div id="stepsSummary" style="margin-top:10px; font-size:0.85em; color:#78350f;"></div>
+            </div>
             
             <button id="optimizeBtn" class="optimize-btn" onclick="optimizeSelected()">
                 🚀 Otimizar Racks
@@ -827,7 +856,8 @@
                         espessura: Number(row['Espessura (mm)'] || row['espessura'] || 0),
                         quantidade: Number(row['quantidade'] || row['Quantidade'] || 1),
                         multiplicador: 1,
-                        selected: false
+                        selected: false,
+                        passo: row['Passo'] || row['passo'] || null
                     }));
                     
                     filteredProducts = [...allProducts];
@@ -868,12 +898,39 @@
             filterProducts();
         }
         
+        // Modo "Passos de Produção" (v38)
+        let stepsEnabled = false;
+        let stepsMode = 'separar';   // 'separar' = racks por passo | 'juntos' = 1 rack Base + 1 rack Lat+Tampa
+        let ordemTampa = 'primeiro'; // 'primeiro' = tampa no fundo (sai último) | 'ultimo' = tampa no topo
+        const STEP_LABELS = {
+            base: 'Base',
+            lattampa: 'Laterais+Tampa'
+        };
+        const STEP_COLORS = {
+            base: '#fca5a5',       // vermelho claro
+            lattampa: '#fcd34d'    // amarelo
+        };
+        
         function renderProductTable() {
             const tbody = document.getElementById('productTableBody');
             tbody.innerHTML = '';
             filteredProducts.forEach(p => {
                 const row = document.createElement('tr');
                 const catClass = getCategoryClass(p.categoria);
+                const step = p.passo || '';  // vazio = não atribuído ainda
+                const stepBgColor = step ? STEP_COLORS[step] : '#f3f4f6';
+                
+                const stepCell = stepsEnabled
+                    ? `<td style="background:${stepBgColor};">
+                        <select onchange="setStepForProduct('${p.id}', this.value)"
+                                style="border:1px solid #d1d5db; border-radius:6px; padding:4px 6px; font-size:0.85em; background:transparent; font-weight:bold;">
+                            <option value="" ${step === '' ? 'selected' : ''}>—</option>
+                            <option value="base" ${step === 'base' ? 'selected' : ''}>1. Base</option>
+                            <option value="lattampa" ${step === 'lattampa' ? 'selected' : ''}>2. Lat+Tampa</option>
+                        </select>
+                      </td>`
+                    : `<td style="color:#9ca3af; font-size:0.8em;">—</td>`;
+                
                 row.innerHTML = `
                     <td><strong>${p.referencia}</strong></td>
                     <td><span class="category-badge ${catClass}">${p.categoria}</span></td>
@@ -883,10 +940,66 @@
                     <td>${p.quantidade}</td>
                     <td style="color:#a78bfa;font-weight:bold;">×${p.multiplicador}</td>
                     <td style="color:#10b981;font-weight:bold;">${p.quantidade * p.multiplicador}</td>
+                    ${stepCell}
                 `;
                 tbody.appendChild(row);
             });
             updateSelectedCount();
+            updateStepsSummary();
+        }
+        
+        function setStepForProduct(productId, step) {
+            const p = allProducts.find(x => String(x.id) === String(productId));
+            if (p) {
+                p.passo = step || null;
+                renderProductTable();
+            }
+        }
+        
+        function toggleStepsMode() {
+            stepsEnabled = !stepsEnabled;
+            document.getElementById('stepsControls').style.display = stepsEnabled ? 'block' : 'none';
+            document.getElementById('toggleStepsBtn').textContent = stepsEnabled ? '❌ Desativar Passos' : '📋 Ativar Passos';
+            renderProductTable();
+        }
+        
+        function assignAllToStep(step) {
+            allProducts.forEach(p => p.passo = step);
+            renderProductTable();
+        }
+        
+        // Heurística: adivinha o passo por keywords no nome da referência
+        function autoAssignSteps() {
+            allProducts.forEach(p => {
+                const n = (p.referencia + ' ' + (p.nome || '')).toUpperCase();
+                // Laterais+Tampa: "TAPA", "LID", "CAMPANA", "COSTADO", "TESTERO", "LATERAL"
+                if (/TAPA|\bLID\b|CAMPANA|TAMPA|COSTADO|TESTERO|LATERAL|TEST\b/.test(n)) {
+                    p.passo = 'lattampa';
+                }
+                // Base: "TARIMA", "BASE", "PATIN", "LARGUER", "LR", "PT", "AP", "TRANSV", "CTT", "UN", "TOPE", "CUNA"
+                else if (/TARIMA|\bBASE\b|PATIN|LARGUER|^LR|\bLR\b|^PT|^PTA|^PTB|TRANSV|^AP\d*|^CTT|^UN\d|TOPE|CUNA/.test(n)) {
+                    p.passo = 'base';
+                }
+                // Fallback: deixar como está
+            });
+            renderProductTable();
+        }
+        
+        function updateStepsSummary() {
+            if (!stepsEnabled) return;
+            const counts = { base: 0, lattampa: 0, nenhum: 0 };
+            allProducts.forEach(p => {
+                const k = p.passo || 'nenhum';
+                counts[k] = (counts[k] || 0) + (p.quantidade * p.multiplicador);
+            });
+            const summary = document.getElementById('stepsSummary');
+            if (summary) {
+                summary.innerHTML = `
+                    <strong>Base:</strong> ${counts.base} peças · 
+                    <strong>Laterais+Tampa:</strong> ${counts.lattampa} peças
+                    ${counts.nenhum > 0 ? `· <span style="color:#b91c1c;"><strong>⚠️ Sem passo:</strong> ${counts.nenhum} peças</span>` : ''}
+                `;
+            }
         }
         
         function getCategoryClass(cat) {
@@ -910,16 +1023,85 @@
             displayResults(racks);
         }
         
+        const LONG_THRESHOLD = 4000; // mm — peças com comprimento >= isto vão para rack próprio
+        
         function optimizeRacks(products) {
-            const byCat = {tabuleiro: [], tabua: [], barrote: []};
+            if (stepsEnabled) {
+                // PEÇAS LONGAS (≥4m, espessura >18mm) FOGEM AOS PASSOS:
+                // vão juntas em racks globais (tábuas longas e largueros separadas por categoria).
+                const longas = [];
+                const curtas = [];
+                products.forEach(p => {
+                    const esp = Number(p.espessura) || 0;
+                    const comp = Number(p.comprimento) || 0;
+                    const ehLonga = comp >= LONG_THRESHOLD && esp > 18;
+                    if (ehLonga) longas.push(p);
+                    else curtas.push(p);
+                });
+                
+                // Processa CURTAS por passo
+                const byStep = { base: [], lattampa: [], _sem: [] };
+                curtas.forEach(p => {
+                    const s = p.passo || '_sem';
+                    byStep[s] = byStep[s] || [];
+                    byStep[s].push(p);
+                });
+                
+                const allRacks = [];
+                const STEP_ORDER = ['base', 'lattampa', '_sem'];
+                for (const step of STEP_ORDER) {
+                    if (!byStep[step] || byStep[step].length === 0) continue;
+                    const stepRacks = optimizeRacksSinglePass(byStep[step]);
+                    stepRacks.forEach(r => { r.passo = step; });
+                    allRacks.push(...stepRacks);
+                }
+                
+                // Processa LONGAS globalmente
+                if (longas.length > 0) {
+                    const longRacks = optimizeRacksSinglePass(longas);
+                    longRacks.forEach(r => { r.passo = 'global'; });
+                    allRacks.push(...longRacks);
+                }
+                
+                allRacks.forEach((r, i) => { r.id = i + 1; });
+                return allRacks;
+            }
+            return optimizeRacksSinglePass(products);
+        }
+        
+        function optimizeRacksSinglePass(products) {
+            // 5 baldes: OSB, Tábuas curtas, Barrotes curtos, Tábuas Longas, Barrotes Longos (Largueros)
+            // Tábuas longas e barrotes longos são CATEGORIAS DIFERENTES (madeiras diferentes),
+            // mas ambas fogem da lógica de "passos de produção" (ver optimizeRacks).
+            const byCat = {
+                tabuleiro: [],       // OSB (qualquer comprimento)
+                tabua: [],           // tábuas curtas (<4m)
+                barrote: [],         // barrotes curtos (<4m)
+                tabua_longa: [],     // tábuas ≥4m (todas juntas)
+                barrote_longo: []    // largueros ≥4m (todos juntos)
+            };
             products.forEach(p => {
-                const cat = p.categoria.toLowerCase();
                 const total = p.quantidade * p.multiplicador;
+                // REGRA v37:
+                //   ≤ 18 mm → OSB
+                //   19-44 mm curta → Tábuas
+                //   19-44 mm ≥4m → Tábuas Longas
+                //   ≥ 45 mm curto → Barrotes
+                //   ≥ 45 mm ≥4m → Largueros (barrotes longos)
+                const esp = Number(p.espessura) || 0;
+                const comp = Number(p.comprimento) || 0;
+                let destKey;
+                if (esp <= 18) {
+                    destKey = 'tabuleiro';
+                } else if (esp < 45) {
+                    destKey = comp >= LONG_THRESHOLD ? 'tabua_longa' : 'tabua';
+                } else {
+                    destKey = comp >= LONG_THRESHOLD ? 'barrote_longo' : 'barrote';
+                }
+                
                 for (let i = 0; i < total; i++) {
-                    const item = {...p, instanceId: `${p.id}-${i}`};
-                    if (cat.includes('tabuleiro')) byCat.tabuleiro.push(item);
-                    else if (cat.includes('tabua') || cat.includes('tábua')) byCat.tabua.push(item);
-                    else if (cat.includes('barrot')) byCat.barrote.push(item);
+                    const item = {...p, instanceId: `${p.id}-${i}`, categoria: destKey};
+                    byCat[destKey].push(item);
                 }
             });
             
@@ -975,7 +1157,7 @@
                 };
             }
             
-            ['tabuleiro', 'tabua', 'barrote'].forEach(catKey => {
+            ['tabuleiro', 'tabua', 'barrote', 'tabua_longa', 'barrote_longo'].forEach(catKey => {
                 let items = byCat[catKey];
                 if (items.length === 0) return;
                 
@@ -1262,18 +1444,34 @@
                 let catName = '';
                 let catColor = '';
                 if (rack.category === 'tabuleiro') {
-                    catName = 'Tabuleiros';
+                    catName = 'OSB';
                     catColor = '#3b82f6';
                 } else if (rack.category === 'tabua') {
                     catName = 'Tábuas';
                     catColor = '#0ea5e9';
-                } else {
+                } else if (rack.category === 'tabua_longa') {
+                    catName = 'Tábuas Longas';
+                    catColor = '#0369a1';
+                } else if (rack.category === 'barrote') {
                     catName = 'Barrotes';
                     catColor = '#06b6d4';
+                } else if (rack.category === 'barrote_longo') {
+                    catName = 'Largueros (Barrotes Longos)';
+                    catColor = '#0891b2';
                 }
                 if (rack.diagonal) {
                     catName += ' (Diagonal)';
                     catColor = '#a855f7';  // roxo — distinguir visualmente
+                }
+                // Marcador do Passo de Produção
+                let passoLabel = '';
+                if (rack.passo === 'global') {
+                    passoLabel = `<span style="background:#c4b5fd; color:#4c1d95; padding:4px 10px; border-radius:6px; font-size:0.7em; font-weight:800; margin-left:10px;">🌐 Todas as Caixas</span>`;
+                } else if (rack.passo && rack.passo !== '_sem') {
+                    const passoNames = { base: '1️⃣ Base', lattampa: '2️⃣ Laterais+Tampa' };
+                    passoLabel = `<span style="background:#fbbf24; color:#78350f; padding:4px 10px; border-radius:6px; font-size:0.7em; font-weight:800; margin-left:10px;">${passoNames[rack.passo] || rack.passo}</span>`;
+                } else if (rack.passo === '_sem') {
+                    passoLabel = `<span style="background:#fca5a5; color:#7f1d1d; padding:4px 10px; border-radius:6px; font-size:0.7em; font-weight:800; margin-left:10px;">⚠️ Sem passo</span>`;
                 }
                 
                 const byDim = {};
@@ -1355,7 +1553,7 @@
                 div.innerHTML = `
                     <div class="rack-header">
                         <div class="rack-title">
-                            🗂️ Rack #${rack.id} - <span style="color:${catColor}">${catName}</span>
+                            🗂️ Rack #${rack.id} - <span style="color:${catColor}">${catName}</span>${passoLabel}
                         </div>
                     </div>
                     
@@ -1447,7 +1645,7 @@
             XLSX.utils.book_append_sheet(wb, wsInfo, 'Info Projeto');
             
             const productsData = [
-                ['Referência', 'Categoria', 'Comprimento (mm)', 'Profundidade (mm)', 'Espessura (mm)', 'Quantidade', 'Multiplicador', 'Total', 'Selecionado']
+                ['Referência', 'Categoria', 'Comprimento (mm)', 'Profundidade (mm)', 'Espessura (mm)', 'Quantidade', 'Multiplicador', 'Total', 'Selecionado', 'Passo']
             ];
             
             allProducts.forEach(p => {
@@ -1460,7 +1658,8 @@
                     p.quantidade,
                     p.multiplicador,
                     p.quantidade * p.multiplicador,
-                    p.selected ? 'SIM' : 'NÃO'
+                    p.selected ? 'SIM' : 'NÃO',
+                    p.passo || ''
                 ]);
             });
             
@@ -2162,11 +2361,17 @@
                     // Cor por categoria
                     let categoryNamePT, categoryNameES, catColor;
                     if (rack.category === 'tabuleiro') {
-                        categoryNamePT = 'Tabuleiros'; categoryNameES = 'Tableros';
+                        categoryNamePT = 'OSB'; categoryNameES = 'OSB';
                         catColor = [59, 130, 246];
                     } else if (rack.category === 'tabua') {
                         categoryNamePT = 'Tabuas'; categoryNameES = 'Tablas';
                         catColor = [14, 165, 233];
+                    } else if (rack.category === 'tabua_longa') {
+                        categoryNamePT = 'Tabuas Longas'; categoryNameES = 'Tablas Largas';
+                        catColor = [3, 105, 161];
+                    } else if (rack.category === 'barrote_longo') {
+                        categoryNamePT = 'Largueros'; categoryNameES = 'Largueros';
+                        catColor = [8, 145, 178];
                     } else {
                         categoryNamePT = 'Barrotes'; categoryNameES = 'Listones';
                         catColor = [6, 182, 212];
@@ -2179,6 +2384,17 @@
                         catColor = [168, 85, 247]; // roxo
                     }
                     
+                    // Prefixo do Passo de Produção
+                    let passoPrefix = '';
+                    if (rack.passo === 'global') {
+                        passoPrefix = '[GLOBAL] ';
+                    } else if (rack.passo && rack.passo !== '_sem') {
+                        const passoNames = { base: '[1.BASE]', lattampa: '[2.LAT+TAMPA]' };
+                        passoPrefix = (passoNames[rack.passo] || '') + ' ';
+                    } else if (rack.passo === '_sem') {
+                        passoPrefix = '[S/PASSO] ';
+                    }
+                    
                     // Borda da célula
                     pdf.setDrawColor(220, 220, 220);
                     pdf.setLineWidth(0.3);
@@ -2186,9 +2402,9 @@
                     
                     // Título do rack
                     let cy = y + 5;
-                    pdf.setFontSize(10);
+                    pdf.setFontSize(9);
                     pdf.setTextColor(...catColor);
-                    pdf.text(`Rack #${rack.id} - ${categoryNamePT} / ${categoryNameES}`, x + 2, cy);
+                    pdf.text(`Rack #${rack.id} ${passoPrefix}- ${categoryNamePT} / ${categoryNameES}`, x + 2, cy);
                     cy += 4;
                     
                     // Altura do rack / das peças

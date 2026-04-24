@@ -418,7 +418,7 @@ input[type="number"].qty {
 <a href="index.html" class="pwa-home-btn" title="Voltar ao menu">← Menu</a>
 <div class="container">
     <div class="header">
-        <h1>🔄 Conversor OT → Otimizador de Racks <span style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v34</span></h1>
+        <h1>🔄 Conversor OT → Otimizador de Racks <span style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v39</span></h1>
         <p>Extrai matriz de produtos de Ordens de Trabalho (PDF) e gera Excel para o otimizador</p>
     </div>
 
@@ -454,16 +454,24 @@ input[type="number"].qty {
     </div>
 
     <div class="card">
-        <h2>📎 2. Carregar OT em PDF</h2>
-        <label class="upload-zone" id="uploadZone">
-            <input type="file" id="pdfInput" accept=".pdf">
-            <div class="icon">📄</div>
-            <div id="uploadLabel" style="font-weight: 600; color: #1e40af;">Clique ou arraste um PDF aqui</div>
-            <div class="hint">OT da Arechaederra ou outro formato semelhante</div>
-        </label>
+        <h2>📎 2. Carregar OT</h2>
+        <div style="display:flex; gap:15px; flex-wrap:wrap;">
+            <label class="upload-zone" id="uploadZone" style="flex:1; min-width:280px;">
+                <input type="file" id="pdfInput" accept=".pdf">
+                <div class="icon">📄</div>
+                <div id="uploadLabel" style="font-weight: 600; color: #1e40af;">PDF da OT</div>
+                <div class="hint">Clique ou arraste um PDF aqui</div>
+            </label>
+            <label class="upload-zone" id="uploadZoneXlsx" style="flex:1; min-width:280px; background:#fef3c7; border-color:#f59e0b;">
+                <input type="file" id="xlsxInput" accept=".xlsx,.xls">
+                <div class="icon">📊</div>
+                <div style="font-weight: 600; color: #92400e;">Excel já convertido</div>
+                <div class="hint" style="color:#78350f;">Carregue para adicionar coluna Passo</div>
+            </label>
+        </div>
         <div id="processingMsg" style="display:none; margin-top: 15px; padding: 12px; background: #eff6ff; border-radius: 8px; color: #1e40af; font-weight: 600;">
             <span class="spinner" style="border-color: rgba(59,130,246,0.3); border-top-color: #3b82f6;"></span>
-            A processar PDF...
+            A processar...
         </div>
     </div>
 
@@ -503,6 +511,7 @@ input[type="number"].qty {
                             <th style="width:70px; text-align:right;">ALTO</th>
                             <th style="width:80px; text-align:right;">CANT</th>
                             <th style="width:130px;">Categoria</th>
+                            <th style="width:130px; background:#fef3c7;">📋 Passo</th>
                             <th style="width:100px;">Aviso</th>
                             <th style="width:50px;">⚙️</th>
                         </tr>
@@ -511,6 +520,10 @@ input[type="number"].qty {
                 </table>
             </div>
             <div class="actions-bar">
+                <button class="btn btn-ghost" onclick="autoAssignStepsConv()" id="btnAutoPasso"
+                        style="background:#fbbf24; color:#78350f; font-weight:600;">
+                    ✨ Auto-Atribuir Passos
+                </button>
                 <button class="btn btn-success" onclick="exportExcel()" id="btnExcel">
                     📊 Exportar Excel (formato otimizador)
                 </button>
@@ -745,6 +758,84 @@ document.getElementById('pdfInput').addEventListener('change', async (e) => {
 });
 
 // =============================================================================
+// UPLOAD DE EXCEL JÁ CONVERTIDO (v38) — só para adicionar coluna Passo
+// =============================================================================
+document.getElementById('xlsxInput').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    document.getElementById('processingMsg').style.display = 'block';
+    document.getElementById('processingMsg').innerHTML = '<span class="spinner" style="border-color: rgba(245,158,11,0.3); border-top-color: #f59e0b;"></span> A carregar Excel...';
+    
+    try {
+        const arrayBuffer = await file.arrayBuffer();
+        const wb = XLSX.read(arrayBuffer, { type: 'array' });
+        
+        // Procurar a sheet com produtos (primeira com colunas esperadas)
+        let rows = null;
+        let otInfo = {};
+        for (const sheetName of wb.SheetNames) {
+            const ws = wb.Sheets[sheetName];
+            const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+            if (data.length > 0 && (data[0]['Referencia'] || data[0]['referencia'] || data[0]['Referência'])) {
+                rows = data;
+                break;
+            }
+            // Se for a sheet "Info" com meta da OT
+            if (sheetName.toLowerCase().includes('info')) {
+                const kv = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+                kv.forEach(r => {
+                    if (r[0] && r[1]) otInfo[r[0]] = r[1];
+                });
+            }
+        }
+        
+        if (!rows || rows.length === 0) {
+            throw new Error('Não foi encontrada nenhuma sheet com produtos. Procure colunas "Referencia" ou "Referência".');
+        }
+        
+        // Mapear linhas Excel → formato interno do conversor
+        products = rows.map((r, idx) => {
+            const nome = r['Nome Original'] || r['nome'] || r['Nome'] || r['Referencia'] || r['Referência'] || r['referencia'] || `Linha ${idx+1}`;
+            const ref = r['Referencia'] || r['Referência'] || r['referencia'] || '';
+            const cat = (r['Categoria'] || r['categoria'] || 'tabuleiro').toLowerCase();
+            
+            return {
+                id: idx + 1,
+                referencia: ref,
+                nome: String(nome),
+                largo: Number(r['Comprimento (mm)'] || r['comprimento'] || r['LARGO'] || 0),
+                ancho: Number(r['Profundidade(mm)'] || r['Profundidade (mm)'] || r['profundidade'] || r['ANCHO'] || 0),
+                alto: Number(r['Espessura (mm)'] || r['espessura'] || r['ALTO'] || 0),
+                cant: Number(r['quantidade'] || r['Quantidade'] || r['CANT'] || 1),
+                categoria: cat.includes('barrot') ? 'barrote' : (cat.includes('tabua') || cat.includes('tábua')) ? 'tabua' : 'tabuleiro',
+                incluir: true,
+                passo: (r['Passo'] || r['passo'] || '').toString().toLowerCase() || null
+            };
+        });
+        
+        // Recuperar meta da OT se disponível
+        otMeta = {
+            ot: otInfo['OT'] || '',
+            unidades: otInfo['Unidades'] || '',
+            cliente: otInfo['Cliente'] || '',
+            descricao: otInfo['Descrição'] || otInfo['Descricao'] || '',
+            fecha: otInfo['Data'] || ''
+        };
+        
+        document.getElementById('processingMsg').style.display = 'none';
+        document.getElementById('uploadZoneXlsx').classList.add('has-file');
+        
+        renderAll();
+        toast(`✅ ${products.length} produtos carregados do Excel. Atribua os passos e exporte de novo.`, 'success');
+        
+    } catch (err) {
+        document.getElementById('processingMsg').style.display = 'none';
+        toast('Erro ao ler Excel: ' + err.message, 'error');
+    }
+});
+
+// =============================================================================
 // RENDERING
 // =============================================================================
 
@@ -818,7 +909,7 @@ function renderTable() {
     document.getElementById('lineCounter').textContent = `(${filtered.length} de ${products.length})`;
     
     if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Nenhum produto corresponde aos filtros</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="empty-state">Nenhum produto corresponde aos filtros</td></tr>';
         return;
     }
     
@@ -885,10 +976,46 @@ function renderTable() {
                     <option value="barrote" ${p.categoria==='barrote'?'selected':''}>🧱 Barrote</option>
                 </select>
             </td>
+            <td style="background:${p.passo === 'base' ? '#fca5a5' : (p.passo === 'lattampa' ? '#fcd34d' : '#f9fafb')};">
+                <select onchange="updatePasso(${p.id}, this.value)"
+                        style="border:1px solid #d1d5db; border-radius:6px; padding:4px 6px; font-weight:600; background:transparent; width:100%;">
+                    <option value="" ${!p.passo ? 'selected' : ''}>—</option>
+                    <option value="base" ${p.passo === 'base' ? 'selected' : ''}>1. Base</option>
+                    <option value="lattampa" ${p.passo === 'lattampa' ? 'selected' : ''}>2. Lat+Tampa</option>
+                </select>
+            </td>
             <td>${aviso}</td>
         </tr>
         `;
     }).join('');
+}
+
+function updatePasso(id, val) {
+    const p = products.find(x => x.id === id);
+    if (p) { p.passo = val || null; renderTable(); }
+}
+
+// Auto-atribuir passos baseado em keywords do nome
+function autoAssignStepsConv() {
+    let atribuidos = 0;
+    products.forEach(p => {
+        const n = (p.nome || '').toUpperCase();
+        // Laterais + Tampa: COSTADO, TESTERO, LATERAL, TAPA, LID, CAMPANA
+        if (/COSTADO|TESTERO|LATERAL|TAPA|LID|CAMPANA|TAMPA|TEST\b/.test(n)) {
+            p.passo = 'lattampa';
+            atribuidos++;
+        }
+        // Base: TARIMA, BASE, PATIN, LARGUER, LR, PT, AP, TRANSV, CTT, UN, TOPE, CUNA
+        else if (/TARIMA|\bBASE\b|PATIN|LARGUER|^LR|\bLR\b|^PT|^PTA|^PTB|TRANSV|^AP\d*|^CTT|^UN\d|TOPE|CUNA/.test(n)) {
+            p.passo = 'base';
+            atribuidos++;
+        }
+        // Peças "1" a "10" (caixa G1 usa nomes numéricos para tampa/laterais)
+        // Neste caso, numéricos na 2ª metade das linhas são tipicamente tampa/laterais
+        // Mas não podemos ter certeza — deixar ao utilizador
+    });
+    alert(`✅ ${atribuidos} peças atribuídas automaticamente.\n\nConfirma as restantes manualmente.`);
+    renderTable();
 }
 
 function toggleInclude(id, val) {
@@ -1188,12 +1315,13 @@ function exportExcel() {
         'Profundidade(mm)': p.ancho,
         'Espessura (mm)': p.alto,
         'quantidade': p.cant,
+        'Passo': p.passo || '',
         'Nome Original': p.nome
     }));
     
     const ws = XLSX.utils.json_to_sheet(rows);
     ws['!cols'] = [
-        {wch: 16}, {wch: 11}, {wch: 15}, {wch: 15}, {wch: 14}, {wch: 12}, {wch: 30}
+        {wch: 16}, {wch: 11}, {wch: 15}, {wch: 15}, {wch: 14}, {wch: 12}, {wch: 12}, {wch: 30}
     ];
     
     const wb = XLSX.utils.book_new();
@@ -1243,6 +1371,7 @@ function exportJSON() {
             profundidade: p.ancho,
             espessura: p.alto,
             quantidade: p.cant,
+            passo: p.passo || null,
             nome: p.nome
         })),
         exportado: new Date().toISOString()

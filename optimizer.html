@@ -666,7 +666,7 @@
 <a href="index.html" class="pwa-home-btn" title="Voltar ao menu">← Menu</a>
     <div class="container">
         <div class="header">
-            <h1>🗂️ Otimizador de Racks <span id="versionBadge" style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v40</span></h1>
+            <h1>🗂️ Otimizador de Racks <span id="versionBadge" style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v41</span></h1>
             <p>Sistema Inteligente de Organização de Material</p>
         </div>
         
@@ -675,8 +675,72 @@
             
             <div class="project-info-grid">
                 <div class="input-group">
-                    <label>Nome do Projeto</label>
-                    <input type="text" id="projectName" placeholder="Armazém Central">
+                    <label>Nome do Projeto / Caixa</label>
+                    <select id="projectNameSelect" onchange="onProjectNameChange(this.value)"
+                            style="padding:12px 16px; border:2px solid #cbd5e1; border-radius:12px; background:#ffffff; color:#1e293b; font-weight:600; width:100%;">
+                        <option value="">— Selecionar caixa —</option>
+                        <optgroup label="KC 390">
+                            <option value="KC 390-Lower Dir (230266R0)">KC 390-Lower Dir (230266R0)</option>
+                            <option value="KC 390-Lower Esq (230266R0)">KC 390-Lower Esq (230266R0)</option>
+                            <option value="KC 390-Upper Dir (230267R1)">KC 390-Upper Dir (230267R1)</option>
+                            <option value="KC 390-Upper Esq (230267R1)">KC 390-Upper Esq (230267R1)</option>
+                            <option value="KC 390-Upper Esq V2 (250317R0)">KC 390-Upper Esq V2 (250317R0)</option>
+                            <option value="KC 390-EV (230265R1)">KC 390-EV (230265R1)</option>
+                            <option value="KC 390-EH (250001R0)">KC 390-EH (250001R0)</option>
+                            <option value="KC 390-Frac 2 (240238R0)">KC 390-Frac 2 (240238R0)</option>
+                            <option value="KC 390-Frac 4 (240239R0)">KC 390-Frac 4 (240239R0)</option>
+                            <option value="KC 390-Frac 6 (240240R0)">KC 390-Frac 6 (240240R0)</option>
+                            <option value="KC 390-Frac 13 (240241R0)">KC 390-Frac 13 (240241R0)</option>
+                            <option value="KC 390-Wing tip (240248R0)">KC 390-Wing tip (240248R0)</option>
+                        </optgroup>
+                        <optgroup label="Praetor">
+                            <option value="Praetor-EH (220310R1)">Praetor-EH (220310R1)</option>
+                            <option value="Praetor-EV (230429R1)">Praetor-EV (230429R1)</option>
+                            <option value="Praetor-TC (230431R0)">Praetor-TC (230431R0)</option>
+                            <option value="Praetor-Semi Asa Dir V2 (230395R3)">Praetor-Semi Asa Dir V2 (230395R3)</option>
+                            <option value="Praetor-Semi Asa Esq V2 (230391R3)">Praetor-Semi Asa Esq V2 (230391R3)</option>
+                        </optgroup>
+                        <optgroup label="E1 Embalagens">
+                            <option value="E1-Embalagem G (230224R0)">E1-Embalagem G (230224R0)</option>
+                            <option value="E1-Embalagem F (230223R0)">E1-Embalagem F (230223R0)</option>
+                            <option value="E1-Embalagem NMF (240249R0)">E1-Embalagem NMF (240249R0)</option>
+                            <option value="E1-Embalagem A (250027R0)">E1-Embalagem A (250027R0)</option>
+                        </optgroup>
+                        <optgroup label="E2 Fracionados">
+                            <option value="E2-Cx1 Desc 4Metros (230385R0)">E2-Cx1 Desc 4Metros (230385R0)</option>
+                            <option value="E2-Frac 2 (230386R1)">E2-Frac 2 (230386R1)</option>
+                            <option value="E2-Frac 7 (240040R0)">E2-Frac 7 (240040R0)</option>
+                            <option value="E2-Frac 8 (230387R0)">E2-Frac 8 (230387R0)</option>
+                            <option value="E2-Frac 9 (230388R0)">E2-Frac 9 (230388R0)</option>
+                            <option value="E2-Frac 10 (230389R0)">E2-Frac 10 (230389R0)</option>
+                            <option value="E2-Frac 11 (230222R0)">E2-Frac 11 (230222R0)</option>
+                            <option value="E2-Frac 12 (230221R1)">E2-Frac 12 (230221R1)</option>
+                            <option value="E2-Frac 22 (230220R0)">E2-Frac 22 (230220R0)</option>
+                        </optgroup>
+                        <optgroup label="E2 Upper/Lower V3">
+                            <option value="E2-Lower Dir V3 (230325R2)">E2-Lower Dir V3 (230325R2)</option>
+                            <option value="E2-Lower Esq V3 (230269R2)">E2-Lower Esq V3 (230269R2)</option>
+                            <option value="E2-Upper Dir V3 (230312R3)">E2-Upper Dir V3 (230312R3)</option>
+                            <option value="E2-Upper Esq V3 (230324R3)">E2-Upper Esq V3 (230324R3)</option>
+                        </optgroup>
+                        <optgroup label="Caixas Sobras">
+                            <option value="Cxs sobras reforçadas (230260R1)">Cxs sobras reforçadas (230260R1)</option>
+                            <option value="Cxs sobras tipo jaula 1200">Cxs sobras tipo jaula 1200</option>
+                            <option value="Cxs sobras tipo jaula 1600 (250221R1)">Cxs sobras tipo jaula 1600 (250221R1)</option>
+                            <option value="Cxs sobras tipo jaula 1600x1200x800 (250283R0)">Cxs sobras tipo jaula 1600x1200x800 (250283R0)</option>
+                        </optgroup>
+                        <optgroup label="Caixas Especiais">
+                            <option value="Caixa para Ailerons">Caixa para Ailerons</option>
+                            <option value="Caixa para Porta Carga">Caixa para Porta Carga</option>
+                            <option value="Caixa para Porta Rat">Caixa para Porta Rat</option>
+                            <option value="Caixa para Spoilers">Caixa para Spoilers</option>
+                        </optgroup>
+                        <optgroup label="Outro">
+                            <option value="__custom__">✏️ Escrever nome manualmente...</option>
+                        </optgroup>
+                    </select>
+                    <input type="text" id="projectName" placeholder="ou escreva o nome manualmente"
+                           style="margin-top:8px; display:none;">
                 </div>
                 <div class="input-group">
                     <label>Data</label>
@@ -839,6 +903,19 @@
             document.getElementById('projectDate').value = new Date().toISOString().split('T')[0];
         });
         
+        function onProjectNameChange(val) {
+            const freeTextInput = document.getElementById('projectName');
+            if (val === '__custom__') {
+                // Mostrar input livre para digitar manualmente
+                freeTextInput.style.display = 'block';
+                freeTextInput.value = '';
+                freeTextInput.focus();
+            } else {
+                // Usar o valor selecionado diretamente
+                freeTextInput.value = val;
+                freeTextInput.style.display = val ? 'none' : 'none';
+            }
+        }
         function applyGlobalMultiplicador(val) {
             const mult = Math.max(1, parseInt(val) || 1);
             allProducts.forEach(p => { p.multiplicador = mult; });
@@ -1760,9 +1837,25 @@
                         throw new Error('Formato de ficheiro inválido');
                     }
                     
-                    document.getElementById('projectName').value = projectData.projectInfo.name || '';
+                    const loadedName = projectData.projectInfo.name || '';
+                    document.getElementById('projectName').value = loadedName;
                     document.getElementById('projectDate').value = projectData.projectInfo.date || '';
                     document.getElementById('projectOT').value = projectData.projectInfo.ot || '';
+                    
+                    // Tentar sincronizar com o dropdown
+                    const sel = document.getElementById('projectNameSelect');
+                    const opts = Array.from(sel.options);
+                    const match = opts.find(o => o.value === loadedName);
+                    if (match) {
+                        sel.value = loadedName;
+                        document.getElementById('projectName').style.display = 'none';
+                    } else if (loadedName) {
+                        sel.value = '__custom__';
+                        document.getElementById('projectName').style.display = 'block';
+                    } else {
+                        sel.value = '';
+                        document.getElementById('projectName').style.display = 'none';
+                    }
                     
                     allProducts = projectData.products;
                     filteredProducts = [...allProducts];
@@ -1799,6 +1892,8 @@
             otMap = {};
             
             document.getElementById('projectName').value = '';
+            document.getElementById('projectName').style.display = 'none';
+            document.getElementById('projectNameSelect').value = '';
             document.getElementById('projectDate').value = new Date().toISOString().split('T')[0];
             document.getElementById('projectOT').value = '';
             document.getElementById('fileName').textContent = '';

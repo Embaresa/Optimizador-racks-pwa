@@ -666,7 +666,7 @@
 <a href="index.html" class="pwa-home-btn" title="Voltar ao menu">← Menu</a>
     <div class="container">
         <div class="header">
-            <h1>🗂️ Otimizador de Racks <span id="versionBadge" style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v39</span></h1>
+            <h1>🗂️ Otimizador de Racks <span id="versionBadge" style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v40</span></h1>
             <p>Sistema Inteligente de Organização de Material</p>
         </div>
         
@@ -765,11 +765,11 @@
             
             <div class="selected-count" id="selectedCount">0 produtos</div>
             
-            <!-- Controlos Passo de Produção (v38) -->
+            <!-- Controlos Passo de Produção (v40) -->
             <div id="stepsControls" style="display:none; background:#fef3c7; border:1px solid #f59e0b; border-radius:12px; padding:16px; margin:16px 0;">
                 <div style="font-weight:700; color:#92400e; margin-bottom:10px;">📋 Passos de Produção</div>
                 <div style="font-size:0.9em; color:#78350f; margin-bottom:12px;">
-                    Cada peça pertence a um passo: <strong>1. Base</strong> ou <strong>2. Laterais+Tampa</strong>.
+                    Cada peça pertence a um passo: <strong>1. Base</strong>, <strong>2. Laterais</strong>, <strong>3. Tampa</strong>.
                     Peças longas (≥4m) consolidam-se em racks próprios globais.
                 </div>
                 <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
@@ -779,10 +779,20 @@
                     <button class="btn-secondary" onclick="assignAllToStep('base')" style="background:#fca5a5;">
                         Tudo → Base
                     </button>
-                    <button class="btn-secondary" onclick="assignAllToStep('lattampa')" style="background:#fcd34d;">
-                        Tudo → Laterais+Tampa
+                    <button class="btn-secondary" onclick="assignAllToStep('laterais')" style="background:#fcd34d;">
+                        Tudo → Laterais
                     </button>
-                    <button class="btn-secondary" onclick="toggleStepsMode()" id="toggleStepsBtn">
+                    <button class="btn-secondary" onclick="assignAllToStep('tampa')" style="background:#86efac;">
+                        Tudo → Tampa
+                    </button>
+                </div>
+                <div style="padding-top:10px; border-top:1px dashed #f59e0b; margin-top:10px;">
+                    <div style="font-weight:700; color:#92400e; margin-bottom:8px;">⚙️ Opções de Agrupamento</div>
+                    <button class="btn-secondary" id="btnJuntarLatTampa" onclick="toggleJuntarLatTampa()"
+                            style="background:#86efac;">
+                        🔗 Laterais + Tampa juntos (1 rack)
+                    </button>
+                    <button class="btn-secondary" onclick="toggleStepsMode()" id="toggleStepsBtn" style="margin-left:8px;">
                         ❌ Desativar Passos
                     </button>
                 </div>
@@ -898,17 +908,22 @@
             filterProducts();
         }
         
-        // Modo "Passos de Produção" (v38)
+        // Modo "Passos de Produção" (v40)
+        // - Conversor usa 3 valores: base / laterais / tampa
+        // - Otimizador decide se junta laterais+tampa ou separa
         let stepsEnabled = false;
-        let stepsMode = 'separar';   // 'separar' = racks por passo | 'juntos' = 1 rack Base + 1 rack Lat+Tampa
-        let ordemTampa = 'primeiro'; // 'primeiro' = tampa no fundo (sai último) | 'ultimo' = tampa no topo
+        let juntarLatTampa = true;   // por defeito junta (1 rack em vez de 2)
         const STEP_LABELS = {
             base: 'Base',
+            laterais: 'Laterais+Testeiros',
+            tampa: 'Tampa',
             lattampa: 'Laterais+Tampa'
         };
         const STEP_COLORS = {
-            base: '#fca5a5',       // vermelho claro
-            lattampa: '#fcd34d'    // amarelo
+            base: '#fca5a5',
+            laterais: '#fcd34d',
+            tampa: '#86efac',
+            lattampa: '#fcd34d'
         };
         
         function renderProductTable() {
@@ -926,7 +941,8 @@
                                 style="border:1px solid #d1d5db; border-radius:6px; padding:4px 6px; font-size:0.85em; background:transparent; font-weight:bold;">
                             <option value="" ${step === '' ? 'selected' : ''}>—</option>
                             <option value="base" ${step === 'base' ? 'selected' : ''}>1. Base</option>
-                            <option value="lattampa" ${step === 'lattampa' ? 'selected' : ''}>2. Lat+Tampa</option>
+                            <option value="laterais" ${step === 'laterais' ? 'selected' : ''}>2. Laterais</option>
+                            <option value="tampa" ${step === 'tampa' ? 'selected' : ''}>3. Tampa</option>
                         </select>
                       </td>`
                     : `<td style="color:#9ca3af; font-size:0.8em;">—</td>`;
@@ -972,22 +988,25 @@
         function autoAssignSteps() {
             allProducts.forEach(p => {
                 const n = (p.referencia + ' ' + (p.nome || '')).toUpperCase();
-                // Laterais+Tampa: "TAPA", "LID", "CAMPANA", "COSTADO", "TESTERO", "LATERAL"
-                if (/TAPA|\bLID\b|CAMPANA|TAMPA|COSTADO|TESTERO|LATERAL|TEST\b/.test(n)) {
-                    p.passo = 'lattampa';
+                // Tampa: TAPA, LID, CAMPANA
+                if (/\bTAPA\b|\bLID\b|CAMPANA|TAMPA/.test(n)) {
+                    p.passo = 'tampa';
                 }
-                // Base: "TARIMA", "BASE", "PATIN", "LARGUER", "LR", "PT", "AP", "TRANSV", "CTT", "UN", "TOPE", "CUNA"
+                // Laterais+Testeiros: COSTADO, TESTERO, LATERAL
+                else if (/COSTADO|TESTERO|LATERAL|TEST\b/.test(n)) {
+                    p.passo = 'laterais';
+                }
+                // Base: TARIMA, BASE, PATIN, LARGUER, LR, PT, AP, TRANSV, CTT, UN, TOPE, CUNA
                 else if (/TARIMA|\bBASE\b|PATIN|LARGUER|^LR|\bLR\b|^PT|^PTA|^PTB|TRANSV|^AP\d*|^CTT|^UN\d|TOPE|CUNA/.test(n)) {
                     p.passo = 'base';
                 }
-                // Fallback: deixar como está
             });
             renderProductTable();
         }
         
         function updateStepsSummary() {
             if (!stepsEnabled) return;
-            const counts = { base: 0, lattampa: 0, nenhum: 0 };
+            const counts = { base: 0, laterais: 0, tampa: 0, nenhum: 0 };
             allProducts.forEach(p => {
                 const k = p.passo || 'nenhum';
                 counts[k] = (counts[k] || 0) + (p.quantidade * p.multiplicador);
@@ -995,10 +1014,22 @@
             const summary = document.getElementById('stepsSummary');
             if (summary) {
                 summary.innerHTML = `
-                    <strong>Base:</strong> ${counts.base} peças · 
-                    <strong>Laterais+Tampa:</strong> ${counts.lattampa} peças
-                    ${counts.nenhum > 0 ? `· <span style="color:#b91c1c;"><strong>⚠️ Sem passo:</strong> ${counts.nenhum} peças</span>` : ''}
+                    <strong>Base:</strong> ${counts.base} · 
+                    <strong>Laterais:</strong> ${counts.laterais} · 
+                    <strong>Tampa:</strong> ${counts.tampa}
+                    ${counts.nenhum > 0 ? `· <span style="color:#b91c1c;"><strong>⚠️ Sem passo:</strong> ${counts.nenhum}</span>` : ''}
                 `;
+            }
+        }
+        
+        function toggleJuntarLatTampa() {
+            juntarLatTampa = !juntarLatTampa;
+            const btn = document.getElementById('btnJuntarLatTampa');
+            if (btn) {
+                btn.textContent = juntarLatTampa
+                    ? '🔗 Laterais + Tampa juntos (1 rack)'
+                    : '✂️ Laterais e Tampa separados (2 racks)';
+                btn.style.background = juntarLatTampa ? '#86efac' : '#cbd5e1';
             }
         }
         
@@ -1027,8 +1058,7 @@
         
         function optimizeRacks(products) {
             if (stepsEnabled) {
-                // PEÇAS LONGAS (≥4m, espessura >18mm) FOGEM AOS PASSOS:
-                // vão juntas em racks globais (tábuas longas e largueros separadas por categoria).
+                // PEÇAS LONGAS (≥4m, esp >18mm) em racks globais
                 const longas = [];
                 const curtas = [];
                 products.forEach(p => {
@@ -1039,16 +1069,22 @@
                     else curtas.push(p);
                 });
                 
-                // Processa CURTAS por passo
-                const byStep = { base: [], lattampa: [], _sem: [] };
+                // CURTAS por passo
+                // Se juntarLatTampa estiver ativo, laterais+tampa ficam no mesmo balde "lattampa"
+                const byStep = { base: [], laterais: [], tampa: [], lattampa: [], _sem: [] };
                 curtas.forEach(p => {
-                    const s = p.passo || '_sem';
-                    byStep[s] = byStep[s] || [];
+                    let s = p.passo || '_sem';
+                    if (juntarLatTampa && (s === 'laterais' || s === 'tampa')) {
+                        s = 'lattampa';
+                    }
                     byStep[s].push(p);
                 });
                 
                 const allRacks = [];
-                const STEP_ORDER = ['base', 'lattampa', '_sem'];
+                // Ordem natural da produção
+                const STEP_ORDER = juntarLatTampa
+                    ? ['base', 'lattampa', '_sem']
+                    : ['base', 'laterais', 'tampa', '_sem'];
                 for (const step of STEP_ORDER) {
                     if (!byStep[step] || byStep[step].length === 0) continue;
                     const stepRacks = optimizeRacksSinglePass(byStep[step]);
@@ -1056,7 +1092,7 @@
                     allRacks.push(...stepRacks);
                 }
                 
-                // Processa LONGAS globalmente
+                // LONGAS globais
                 if (longas.length > 0) {
                     const longRacks = optimizeRacksSinglePass(longas);
                     longRacks.forEach(r => { r.passo = 'global'; });
@@ -1468,7 +1504,12 @@
                 if (rack.passo === 'global') {
                     passoLabel = `<span style="background:#c4b5fd; color:#4c1d95; padding:4px 10px; border-radius:6px; font-size:0.7em; font-weight:800; margin-left:10px;">🌐 Todas as Caixas</span>`;
                 } else if (rack.passo && rack.passo !== '_sem') {
-                    const passoNames = { base: '1️⃣ Base', lattampa: '2️⃣ Laterais+Tampa' };
+                    const passoNames = {
+                        base: '1️⃣ Base',
+                        laterais: '2️⃣ Laterais',
+                        tampa: '3️⃣ Tampa',
+                        lattampa: '2️⃣ Laterais+Tampa'
+                    };
                     passoLabel = `<span style="background:#fbbf24; color:#78350f; padding:4px 10px; border-radius:6px; font-size:0.7em; font-weight:800; margin-left:10px;">${passoNames[rack.passo] || rack.passo}</span>`;
                 } else if (rack.passo === '_sem') {
                     passoLabel = `<span style="background:#fca5a5; color:#7f1d1d; padding:4px 10px; border-radius:6px; font-size:0.7em; font-weight:800; margin-left:10px;">⚠️ Sem passo</span>`;
@@ -2389,7 +2430,12 @@
                     if (rack.passo === 'global') {
                         passoPrefix = '[GLOBAL] ';
                     } else if (rack.passo && rack.passo !== '_sem') {
-                        const passoNames = { base: '[1.BASE]', lattampa: '[2.LAT+TAMPA]' };
+                        const passoNames = {
+                            base: '[1.BASE]',
+                            laterais: '[2.LAT]',
+                            tampa: '[3.TAMPA]',
+                            lattampa: '[2.LAT+TAMPA]'
+                        };
                         passoPrefix = (passoNames[rack.passo] || '') + ' ';
                     } else if (rack.passo === '_sem') {
                         passoPrefix = '[S/PASSO] ';

@@ -418,7 +418,7 @@ input[type="number"].qty {
 <a href="index.html" class="pwa-home-btn" title="Voltar ao menu">← Menu</a>
 <div class="container">
     <div class="header">
-        <h1>🔄 Conversor OT → Otimizador de Racks <span style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v39</span></h1>
+        <h1>🔄 Conversor OT → Otimizador de Racks <span style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v40</span></h1>
         <p>Extrai matriz de produtos de Ordens de Trabalho (PDF) e gera Excel para o otimizador</p>
     </div>
 
@@ -976,12 +976,13 @@ function renderTable() {
                     <option value="barrote" ${p.categoria==='barrote'?'selected':''}>🧱 Barrote</option>
                 </select>
             </td>
-            <td style="background:${p.passo === 'base' ? '#fca5a5' : (p.passo === 'lattampa' ? '#fcd34d' : '#f9fafb')};">
+            <td style="background:${p.passo === 'base' ? '#fca5a5' : (p.passo === 'laterais' ? '#fcd34d' : (p.passo === 'tampa' ? '#86efac' : '#f9fafb'))};">
                 <select onchange="updatePasso(${p.id}, this.value)"
                         style="border:1px solid #d1d5db; border-radius:6px; padding:4px 6px; font-weight:600; background:transparent; width:100%;">
                     <option value="" ${!p.passo ? 'selected' : ''}>—</option>
                     <option value="base" ${p.passo === 'base' ? 'selected' : ''}>1. Base</option>
-                    <option value="lattampa" ${p.passo === 'lattampa' ? 'selected' : ''}>2. Lat+Tampa</option>
+                    <option value="laterais" ${p.passo === 'laterais' ? 'selected' : ''}>2. Laterais</option>
+                    <option value="tampa" ${p.passo === 'tampa' ? 'selected' : ''}>3. Tampa</option>
                 </select>
             </td>
             <td>${aviso}</td>
@@ -1000,9 +1001,14 @@ function autoAssignStepsConv() {
     let atribuidos = 0;
     products.forEach(p => {
         const n = (p.nome || '').toUpperCase();
-        // Laterais + Tampa: COSTADO, TESTERO, LATERAL, TAPA, LID, CAMPANA
-        if (/COSTADO|TESTERO|LATERAL|TAPA|LID|CAMPANA|TAMPA|TEST\b/.test(n)) {
-            p.passo = 'lattampa';
+        // Tampa: TAPA, LID, CAMPANA
+        if (/\bTAPA\b|\bLID\b|CAMPANA|TAMPA/.test(n)) {
+            p.passo = 'tampa';
+            atribuidos++;
+        }
+        // Laterais+Testeiros: COSTADO, TESTERO, LATERAL
+        else if (/COSTADO|TESTERO|LATERAL|TEST\b/.test(n)) {
+            p.passo = 'laterais';
             atribuidos++;
         }
         // Base: TARIMA, BASE, PATIN, LARGUER, LR, PT, AP, TRANSV, CTT, UN, TOPE, CUNA
@@ -1010,9 +1016,6 @@ function autoAssignStepsConv() {
             p.passo = 'base';
             atribuidos++;
         }
-        // Peças "1" a "10" (caixa G1 usa nomes numéricos para tampa/laterais)
-        // Neste caso, numéricos na 2ª metade das linhas são tipicamente tampa/laterais
-        // Mas não podemos ter certeza — deixar ao utilizador
     });
     alert(`✅ ${atribuidos} peças atribuídas automaticamente.\n\nConfirma as restantes manualmente.`);
     renderTable();

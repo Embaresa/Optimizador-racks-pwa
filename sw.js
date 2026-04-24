@@ -1,7 +1,7 @@
 // Service Worker — cache offline-first
 // Incrementar CACHE_VERSION sempre que alterar qualquer ficheiro estático
 
-const CACHE_VERSION = 'v17';
+const CACHE_VERSION = 'v32';
 const CACHE_NAME = `racks-pwa-${CACHE_VERSION}`;
 
 // Ficheiros locais a pré-cachear
@@ -13,7 +13,8 @@ const CORE_ASSETS = [
     './manifest.webmanifest',
     './icon-192.png',
     './icon-512.png',
-    './icon-maskable.png'
+    './icon-maskable.png',
+    './logo.jpg'
 ];
 
 // CDNs externos que usamos — tentamos cachear quando acedidos
@@ -43,7 +44,7 @@ self.addEventListener('activate', event => {
     );
 });
 
-// --- Fetch: cache-first para core, network-first para CDNs, fallback cache ---
+// --- Fetch: network-first para HTML (pega sempre última versão), cache para CDNs ---
 self.addEventListener('fetch', event => {
     const req = event.request;
     
@@ -57,13 +58,15 @@ self.addEventListener('fetch', event => {
     );
     
     if (isCore) {
-        // Cache-first
+        // NETWORK-FIRST: tentar buscar sempre a versão mais recente.
+        // Se falhar (offline), cai para cache. Garante que atualizações chegam ao utilizador.
         event.respondWith(
-            caches.match(req).then(cached => cached || fetch(req).then(resp => {
+            fetch(req).then(resp => {
+                // Sucesso: actualiza cache e devolve
                 const copy = resp.clone();
                 caches.open(CACHE_NAME).then(c => c.put(req, copy));
                 return resp;
-            }))
+            }).catch(() => caches.match(req))
         );
     } else if (isCDN) {
         // Stale-while-revalidate

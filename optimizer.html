@@ -666,7 +666,7 @@
 <a href="index.html" class="pwa-home-btn" title="Voltar ao menu">← Menu</a>
     <div class="container">
         <div class="header">
-            <h1>🗂️ Otimizador de Racks</h1>
+            <h1>🗂️ Otimizador de Racks <span id="versionBadge" style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v32</span></h1>
             <p>Sistema Inteligente de Organização de Material</p>
         </div>
         
@@ -940,24 +940,68 @@
             }
             
             // Determina a melhor orientação (L×D vs D×L) para maximizar peças no rack
-            function melhorOrientacao(comprimento, profundidade) {
+            function melhorOrientacao(comprimento, profundidade, categoria) {
+                // Saliência na profundidade é aceitável em todas as categorias.
+                // Ambas as orientações (rotada ou não) podem ter peças salientes.
+                // Calculamos ppl para as duas e escolhemos a que dá MAIS peças por layer.
+                
                 const effL = Math.min(comprimento, RACK_LENGTH);
                 const effD = Math.min(profundidade, RACK_DEPTH);
-                const ppl1 = Math.floor(RACK_LENGTH / effL) * Math.floor(RACK_DEPTH / effD);
-                const ppl2 = Math.floor(RACK_LENGTH / effD) * Math.floor(RACK_DEPTH / effL);
-                const useRot = ppl2 > ppl1;
+                const ppl1 = Math.max(1, Math.floor(RACK_LENGTH / effL) * Math.floor(RACK_DEPTH / effD));
+                const ppl2 = Math.max(1, Math.floor(RACK_LENGTH / effD) * Math.floor(RACK_DEPTH / effL));
+                
+                // Escolher orientação que maximiza peças. Em caso de empate, preferir a que
+                // coloca o comprimento ao longo do rack (mais natural, menos saliência).
+                let useRot;
+                if (ppl2 > ppl1) {
+                    useRot = true;
+                } else if (ppl1 > ppl2) {
+                    useRot = false;
+                } else {
+                    // Empate: preferir comprimento no eixo 1260 se couber
+                    const cabe1 = comprimento <= RACK_LENGTH;
+                    const cabe2 = profundidade <= RACK_LENGTH;
+                    if (cabe1 && !cabe2) useRot = false;
+                    else if (!cabe1 && cabe2) useRot = true;
+                    else useRot = false;  // default: sem rotação
+                }
+                
                 return {
                     rotated: useRot,
                     actL: useRot ? effD : effL,
                     actD: useRot ? effL : effD,
                     ppl: useRot ? ppl2 : ppl1,
-                    ppr: useRot ? Math.floor(RACK_LENGTH / effD) : Math.floor(RACK_LENGTH / effL)
+                    ppr: useRot ? Math.max(1, Math.floor(RACK_LENGTH / effD)) : Math.max(1, Math.floor(RACK_LENGTH / effL))
                 };
             }
             
             ['tabuleiro', 'tabua', 'barrote'].forEach(catKey => {
-                const items = byCat[catKey];
+                let items = byCat[catKey];
                 if (items.length === 0) return;
+                
+                // TABULEIROS: separar peças que não cabem em nenhuma orientação
+                // (ambas dimensões > RACK_LENGTH). Vão para rack especial diagonal.
+                // IMPORTANTE: forçar Number() para evitar bugs com strings vindas do Excel
+                let itemsDiagonais = [];
+                if (catKey === 'tabuleiro') {
+                    const ehDiagonal = (it) => (
+                        Number(it.comprimento) > RACK_LENGTH && Number(it.profundidade) > RACK_LENGTH
+                    );
+                    itemsDiagonais = items.filter(ehDiagonal);
+                    items = items.filter(it => !ehDiagonal(it));
+                    
+                    // Garantir que as dimensões ficam numéricas em todos os items
+                    itemsDiagonais.forEach(it => {
+                        it.comprimento = Number(it.comprimento);
+                        it.profundidade = Number(it.profundidade);
+                        it.espessura = Number(it.espessura);
+                    });
+                    items.forEach(it => {
+                        it.comprimento = Number(it.comprimento);
+                        it.profundidade = Number(it.profundidade);
+                        it.espessura = Number(it.espessura);
+                    });
+                }
                 
                 const groups = {};
                 items.forEach(item => {
@@ -981,7 +1025,7 @@
                 for (let group of sorted) {
                     const tpl = group.template;
                     const prods = group.products;
-                    const orient = melhorOrientacao(tpl.comprimento, tpl.profundidade);
+                    const orient = melhorOrientacao(tpl.comprimento, tpl.profundidade, catKey);
                     
                     let remaining = [...prods];
                     
@@ -1083,6 +1127,113 @@
                 }
                 
                 if (rack.items.length > 0) racks.push(rack);
+                
+                // Rack diagonal: tabuleiros que não cabem em nenhuma orientação
+                if (itemsDiagonais.length > 0) {
+                    // Agrupar por dimensões para calcular layout
+                    const groupsDiag = {};
+                    itemsDiagonais.forEach(item => {
+                        const key = `${item.comprimento}x${item.profundidade}x${item.espessura}`;
+                        if (!groupsDiag[key]) groupsDiag[key] = {products: [], template: item};
+                        groupsDiag[key].products.push(item);
+                    });
+                    
+                    // Ângulo fixo de 60° — visualmente claro, como na foto Praetor real.
+                    // A peça pode exceder ligeiramente a altura nominal do rack,
+                    // como acontece no armazém (ponta sobe acima do rack).
+                    const ANGULO_DIAGONAL = 60;
+                    const sinAng = Math.sin(ANGULO_DIAGONAL * Math.PI / 180);
+                    const cosAng = Math.cos(ANGULO_DIAGONAL * Math.PI / 180);
+                    
+                    // Encontrar a dim maior entre todos os grupos
+                    let maiorDim = 0;
+                    for (const g of Object.values(groupsDiag)) {
+                        const dm = Math.max(g.template.comprimento, g.template.profundidade);
+                        if (dm > maiorDim) maiorDim = dm;
+                    }
+                    
+                    // Altura do rack: usar a maior altura disponível (1200mm)
+                    // porque peças a 60° quase sempre excedem se forem grandes
+                    const alturaPecas = Math.round(maiorDim * sinAng);
+                    const alturaRack = AVAILABLE_HEIGHTS[AVAILABLE_HEIGHTS.length - 1]; // 1200mm
+                    
+                    const rackDiag = {
+                        id: rackId++,
+                        height: alturaRack,
+                        items: [],
+                        category: catKey,
+                        layers: [],
+                        diagonal: true,  // marcador para a visualização 3D
+                        angulo: ANGULO_DIAGONAL
+                    };
+                    
+                    // Empilhar peças como "livros numa estante" inclinados:
+                    //   - Todas centradas em X (ao longo do rack, 1260mm)
+                    //   - Cada peça ocupa espessura em Z (profundidade acumulada)
+                    //   - Limite: RACK_DEPTH (810mm)
+                    // IMPORTANTE: a posição "item.x" abaixo é na realidade o offset em Z
+                    //             (mantive o nome para compatibilidade com o renderer)
+                    let cursorZ = 0;
+                    let alturaMaxRack = 0;
+                    
+                    for (const group of Object.values(groupsDiag)) {
+                        const tpl = group.template;
+                        const dimMaior = Math.max(tpl.comprimento, tpl.profundidade);
+                        const dimMenor = Math.min(tpl.comprimento, tpl.profundidade);
+                        
+                        // Projeção vertical da peça inclinada
+                        const alturaProjectada = dimMaior * sinAng;
+                        if (alturaProjectada > alturaMaxRack) alturaMaxRack = alturaProjectada;
+                        
+                        for (const prod of group.products) {
+                            // Se z ultrapassar a profundidade do rack, abre rack novo
+                            if (cursorZ + prod.espessura > RACK_DEPTH) {
+                                if (rackDiag.items.length > 0) {
+                                    rackDiag.layers.push({
+                                        z: 0,
+                                        height: alturaMaxRack,
+                                        usedArea: rackDiag.items.map(() => ({})),
+                                        ppl: rackDiag.items.length,
+                                        ppr: rackDiag.items.length,
+                                        actL: prod.espessura,
+                                        actD: dimMenor
+                                    });
+                                    racks.push({...rackDiag});
+                                }
+                                Object.assign(rackDiag, {
+                                    id: rackId++,
+                                    items: [],
+                                    layers: []
+                                });
+                                cursorZ = 0;
+                                alturaMaxRack = 0;
+                            }
+                            rackDiag.items.push({
+                                ...prod,
+                                x: cursorZ,  // compatibilidade com renderer (usa item.x como offset Z)
+                                y: 0,
+                                z: 0,
+                                rotated: false,
+                                inclinada: true,
+                                dimMaior: dimMaior,
+                                dimMenor: dimMenor
+                            });
+                            cursorZ += prod.espessura;
+                        }
+                    }
+                    
+                    if (rackDiag.items.length > 0) {
+                        // Layer fictícia final para cálculo de altura
+                        rackDiag.layers.push({
+                            z: 0,
+                            height: alturaMaxRack,
+                            usedArea: rackDiag.items.map(() => ({})),
+                            ppl: rackDiag.items.length,
+                            ppr: rackDiag.items.length
+                        });
+                        racks.push(rackDiag);
+                    }
+                }
             });
             
             return racks;
@@ -1119,6 +1270,10 @@
                 } else {
                     catName = 'Barrotes';
                     catColor = '#06b6d4';
+                }
+                if (rack.diagonal) {
+                    catName += ' (Diagonal)';
+                    catColor = '#a855f7';  // roxo — distinguir visualmente
                 }
                 
                 const byDim = {};
@@ -1189,12 +1344,12 @@
                 
                 tableHTML += `</tbody></table>`;
                 
-                // Calcular altura total efectiva ocupada pelas peças
+                // Calcular altura total efectiva ocupada pelas peças (arredondada)
                 const alturaPecas = rack.layers.length > 0
-                    ? Math.max(...rack.layers.map(l => l.z + l.height))
+                    ? Math.round(Math.max(...rack.layers.map(l => l.z + l.height)))
                     : 0;
                 const aproveitamento = rack.height > 0 
-                    ? Math.round((alturaPecas / rack.height) * 100)
+                    ? Math.min(100, Math.round((alturaPecas / rack.height) * 100))
                     : 0;
                 
                 div.innerHTML = `
@@ -1230,7 +1385,7 @@
                             <div class="control-item">🖱️ Arrasta para rodar</div>
                             <div class="control-item">🔍 Scroll para zoom</div>
                             <div style="margin-top: 15px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.2);">
-                                <div class="control-item" style="color: #ef4444; font-weight: 700;">⚠️ Borda vermelha = Excede rack</div>
+                                <div class="control-item" style="color: #ef4444; font-weight: 700;">⚠️ Vermelho = não cabe em nenhuma orientação</div>
                             </div>
                         </div>
                     </div>
@@ -1503,7 +1658,16 @@
             });
             const postGeometry = new THREE.CylinderGeometry(postRadius, postRadius, rack.height, 32);
             
-            [[0, 0], [RACK_LENGTH, 0], [0, RACK_DEPTH], [RACK_LENGTH, RACK_DEPTH]].forEach(([x, z]) => {
+            // Posicionar os postes FORA da zona útil (deslocados pelo raio para fora de cada canto).
+            // Assim a zona [0..RACK_LENGTH] × [0..RACK_DEPTH] fica livre para peças sem
+            // sobreposição com os postes.
+            const postOffset = postRadius;
+            [
+                [-postOffset, -postOffset],
+                [RACK_LENGTH + postOffset, -postOffset],
+                [-postOffset, RACK_DEPTH + postOffset],
+                [RACK_LENGTH + postOffset, RACK_DEPTH + postOffset]
+            ].forEach(([x, z]) => {
                 const post = new THREE.Mesh(postGeometry, postMaterial);
                 post.position.set(x, rack.height / 2, z);
                 post.castShadow = true;
@@ -1516,7 +1680,10 @@
                 scene.add(cap);
             });
             
-            const frameGeometry = new THREE.BoxGeometry(RACK_LENGTH, rack.height, RACK_DEPTH);
+            // Frame visual que abraça os postes (incluindo offset para fora)
+            const frameW = RACK_LENGTH + 2 * postOffset;
+            const frameD = RACK_DEPTH + 2 * postOffset;
+            const frameGeometry = new THREE.BoxGeometry(frameW, rack.height, frameD);
             const frameEdges = new THREE.EdgesGeometry(frameGeometry);
             const frameLine = new THREE.LineSegments(
                 frameEdges,
@@ -1530,6 +1697,71 @@
             frameLine.position.set(centerX, centerY, centerZ);
             scene.add(frameLine);
             
+            // === RACK DIAGONAL ===
+            // Peças ficam inclinadas, lado a lado ao longo do comprimento do rack.
+            // Cada peça apoia-se pela sua espessura no chão e sobe em diagonal.
+            if (rack.diagonal) {
+                const ang = (rack.angulo || 60) * Math.PI / 180;
+                const sinA = Math.sin(ang);
+                const cosA = Math.cos(ang);
+                
+                rack.items.forEach(item => {
+                    // Peça inclinada ao estilo "foto Praetor":
+                    // - Apoia-se numa aresta inferior frontal
+                    // - Inclina para trás, subindo em altura
+                    // - Peças múltiplas ficam lado a lado em Z (profundidade do rack)
+                    const dimMaior = item.dimMaior || Math.max(item.comprimento, item.profundidade);
+                    const dimMenor = item.dimMenor || Math.min(item.comprimento, item.profundidade);
+                    
+                    // Caixa construída:
+                    //   X = dimMenor (paralelo à largura do rack)
+                    //   Y = dimMaior (altura da peça em pé)
+                    //   Z = espessura (profundidade da peça quando apoiada)
+                    const geometry = new THREE.BoxGeometry(dimMenor, dimMaior, item.espessura);
+                    
+                    // Pivot: aresta inferior-frontal (Y=0, Z=0)
+                    geometry.translate(0, dimMaior / 2, item.espessura / 2);
+                    
+                    const color = new THREE.Color(getCategoryColor(item.categoria));
+                    const material = new THREE.MeshStandardMaterial({
+                        color: color,
+                        metalness: 0.3,
+                        roughness: 0.4,
+                        emissive: color,
+                        emissiveIntensity: 0.15,
+                        transparent: true,
+                        opacity: 0.95
+                    });
+                    const mesh = new THREE.Mesh(geometry, material);
+                    
+                    // Posicionar:
+                    //   X: centrar peça ao longo do rack (RACK_LENGTH / 2)
+                    //   Z: cada peça ocupa sua espessura cumulativa (item.x agora = posição em Z)
+                    mesh.position.set(
+                        RACK_LENGTH / 2,
+                        0,
+                        item.x  // offset Z acumulado (espessura)
+                    );
+                    
+                    // Rodar: inclinação de (90 - ang)° em torno de X → topo vai para Z+
+                    // Como rodamos em torno do eixo X, e nossa geometria tem Y vertical,
+                    // após rotação X: Y original inclina para Z → topo da peça fica atrás
+                    mesh.rotation.x = (Math.PI / 2 - ang);
+                    mesh.castShadow = true;
+                    mesh.receiveShadow = true;
+                    scene.add(mesh);
+                    
+                    // Borda escura para contraste
+                    const edges = new THREE.EdgesGeometry(geometry);
+                    const edgeLine = new THREE.LineSegments(
+                        edges,
+                        new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 1, transparent: true, opacity: 0.4 })
+                    );
+                    edgeLine.position.copy(mesh.position);
+                    edgeLine.rotation.copy(mesh.rotation);
+                    scene.add(edgeLine);
+                });
+            } else {
             rack.items.forEach(item => {
                 let realL, realD;
                 if (item.rotated) {
@@ -1540,10 +1772,18 @@
                     realD = item.profundidade;
                 }
                 
+                // Saliência aceitável em TODAS as categorias.
+                // Uma peça só é marcada vermelha quando NÃO cabe em nenhuma orientação
+                // (ambas as dimensões > RACK_LENGTH). Para tabuleiros estas vão para
+                // rack diagonal; tábuas/barrotes ficam no rack normal (caso raro).
+                const ambasExcedemLength = item.comprimento > RACK_LENGTH && item.profundidade > RACK_LENGTH;
                 const exceedsLength = realL > RACK_LENGTH;
                 const exceedsDepth = realD > RACK_DEPTH;
-                const exceedsRack = exceedsLength || exceedsDepth;
+                const exceedsRack = ambasExcedemLength;
+                const isSaliente = (exceedsDepth || exceedsLength) && !exceedsRack;
                 
+                // Renderizar com tamanho REAL — peças salientes mostram a saliência,
+                // como nas fotos reais do armazém.
                 const geometry = new THREE.BoxGeometry(realL, item.espessura, realD);
                 const color = new THREE.Color(getCategoryColor(item.categoria));
                 
@@ -1559,14 +1799,18 @@
                 
                 const mesh = new THREE.Mesh(geometry, material);
                 
+                // Posicionar: peças salientes centram-se no rack (saem pelos dois lados)
                 let posX, posZ;
                 
+                // X: se peça é mais longa que o rack, centramos; se cabe, usamos posição slot
                 if (exceedsLength) {
                     posX = RACK_LENGTH / 2;
                 } else {
                     posX = item.x + realL / 2;
                 }
                 
+                // Z: se peça é mais funda que o rack (saliente), centramos no rack (sai pelos 2 lados)
+                // Se cabe, usamos a posição original do slot
                 if (exceedsDepth) {
                     posZ = RACK_DEPTH / 2;
                 } else {
@@ -1610,6 +1854,7 @@
                     scene.add(alertLine);
                 }
             });
+            }  // fim do else (ramo normal)
             
             let isDragging = false;
             let previousMousePosition = { x: 0, y: 0 };
@@ -1808,13 +2053,37 @@
                 // Helper bilingue: texto PT / ES em linha
                 const bilang = (pt, es) => `${pt} / ${es}`;
                 
-                // ===== CABEÇALHO =====
+                // ===== CABEÇALHO COM LOGO =====
+                // Tentar carregar o logo (opcional — se falhar, PDF continua sem ele)
+                let logoBase64 = null;
+                try {
+                    const logoResp = await fetch('logo.jpg');
+                    if (logoResp.ok) {
+                        const blob = await logoResp.blob();
+                        logoBase64 = await new Promise((resolve) => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => resolve(reader.result);
+                            reader.readAsDataURL(blob);
+                        });
+                    }
+                } catch (e) {
+                    console.warn('Logo não carregado (opcional):', e);
+                }
+                
+                // Logo no canto superior esquerdo (se carregado)
+                const logoWidth = 35;  // mm
+                const logoHeight = 11; // mm (proporção aprox do logo fornecido)
+                if (logoBase64) {
+                    pdf.addImage(logoBase64, 'JPEG', margin, yPosition - 2, logoWidth, logoHeight);
+                }
+                
+                // Título centrado (pode partilhar linha com o logo à esquerda)
                 pdf.setFontSize(16);
                 pdf.setTextColor(59, 130, 246);
                 pdf.text(bilang('Relatorio de Otimizacao de Racks',
                                  'Informe de Optimizacion de Racks'),
-                         pageWidth / 2, yPosition, { align: 'center' });
-                yPosition += 7;
+                         pageWidth / 2, yPosition + 5, { align: 'center' });
+                yPosition += Math.max(12, logoHeight + 3);
                 
                 pdf.setDrawColor(59, 130, 246);
                 pdf.setLineWidth(0.4);
@@ -1901,6 +2170,13 @@
                         catColor = [6, 182, 212];
                     }
                     
+                    // Se for rack diagonal, marcar com (Diagonal) e cor roxa
+                    if (rack.diagonal) {
+                        categoryNamePT += ' (Diagonal)';
+                        categoryNameES += ' (Diagonal)';
+                        catColor = [168, 85, 247]; // roxo
+                    }
+                    
                     // Borda da célula
                     pdf.setDrawColor(220, 220, 220);
                     pdf.setLineWidth(0.3);
@@ -1915,7 +2191,7 @@
                     
                     // Altura do rack / das peças
                     const alturaPecas = rack.layers && rack.layers.length > 0
-                        ? Math.max(...rack.layers.map(l => l.z + l.height))
+                        ? Math.round(Math.max(...rack.layers.map(l => l.z + l.height)))
                         : 0;
                     
                     pdf.setFontSize(8);

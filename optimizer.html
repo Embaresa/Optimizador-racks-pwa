@@ -666,7 +666,7 @@
 <a href="index.html" class="pwa-home-btn" title="Voltar ao menu">← Menu</a>
     <div class="container">
         <div class="header">
-            <h1>🗂️ Otimizador de Racks <span id="versionBadge" style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v32</span></h1>
+            <h1>🗂️ Otimizador de Racks <span id="versionBadge" style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v33</span></h1>
             <p>Sistema Inteligente de Organização de Material</p>
         </div>
         
@@ -2077,12 +2077,14 @@
                     pdf.addImage(logoBase64, 'JPEG', margin, yPosition - 2, logoWidth, logoHeight);
                 }
                 
-                // Título centrado (pode partilhar linha com o logo à esquerda)
-                pdf.setFontSize(16);
+                // Título centrado no espaço à direita do logo (para não sobrepor)
+                pdf.setFontSize(14);
                 pdf.setTextColor(59, 130, 246);
+                const areaTitleStart = margin + logoWidth + 5;
+                const areaTitleCenter = (areaTitleStart + pageWidth - margin) / 2;
                 pdf.text(bilang('Relatorio de Otimizacao de Racks',
                                  'Informe de Optimizacion de Racks'),
-                         pageWidth / 2, yPosition + 5, { align: 'center' });
+                         areaTitleCenter, yPosition + 6, { align: 'center' });
                 yPosition += Math.max(12, logoHeight + 3);
                 
                 pdf.setDrawColor(59, 130, 246);

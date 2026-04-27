@@ -666,7 +666,7 @@
 <a href="index.html" class="pwa-home-btn" title="Voltar ao menu">← Menu</a>
     <div class="container">
         <div class="header">
-            <h1>🗂️ Otimizador de Racks <span id="versionBadge" style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v46</span></h1>
+            <h1>🗂️ Otimizador de Racks <span id="versionBadge" style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v48</span></h1>
             <p>Sistema Inteligente de Organização de Material</p>
         </div>
         
@@ -916,10 +916,41 @@
         const AVAILABLE_HEIGHTS = [400, 600, 800, 1000, 1200];
         const TOL_ESPESSURA = 0;
         
+        // Determina a melhor orientação (L×D vs D×L) para maximizar peças no rack
+        function melhorOrientacao(comprimento, profundidade, categoria) {
+            const effL = Math.min(comprimento, RACK_LENGTH);
+            const effD = Math.min(profundidade, RACK_DEPTH);
+            const ppl1 = Math.max(1, Math.floor(RACK_LENGTH / effL) * Math.floor(RACK_DEPTH / effD));
+            const ppl2 = Math.max(1, Math.floor(RACK_LENGTH / effD) * Math.floor(RACK_DEPTH / effL));
+            
+            let useRot;
+            if (ppl2 > ppl1) {
+                useRot = true;
+            } else if (ppl1 > ppl2) {
+                useRot = false;
+            } else {
+                const cabe1 = comprimento <= RACK_LENGTH;
+                const cabe2 = profundidade <= RACK_LENGTH;
+                if (cabe1 && !cabe2) useRot = false;
+                else if (!cabe1 && cabe2) useRot = true;
+                else useRot = false;
+            }
+            
+            return {
+                rotated: useRot,
+                actL: useRot ? effD : effL,
+                actD: useRot ? effL : effD,
+                ppl: useRot ? ppl2 : ppl1,
+                ppr: useRot ? Math.max(1, Math.floor(RACK_LENGTH / effD)) : Math.max(1, Math.floor(RACK_LENGTH / effL))
+            };
+        }
+        
         let allProducts = [];
         let filteredProducts = [];
         let currentRacksData = [];
         let otMap = {};
+        // Registo de instâncias Three.js por rackId — usado para libertar e re-renderizar
+        const rack3DRegistry = {};
         
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('projectDate').value = new Date().toISOString().split('T')[0];
@@ -1296,42 +1327,6 @@
                 return 1;
             }
             
-            // Determina a melhor orientação (L×D vs D×L) para maximizar peças no rack
-            function melhorOrientacao(comprimento, profundidade, categoria) {
-                // Saliência na profundidade é aceitável em todas as categorias.
-                // Ambas as orientações (rotada ou não) podem ter peças salientes.
-                // Calculamos ppl para as duas e escolhemos a que dá MAIS peças por layer.
-                
-                const effL = Math.min(comprimento, RACK_LENGTH);
-                const effD = Math.min(profundidade, RACK_DEPTH);
-                const ppl1 = Math.max(1, Math.floor(RACK_LENGTH / effL) * Math.floor(RACK_DEPTH / effD));
-                const ppl2 = Math.max(1, Math.floor(RACK_LENGTH / effD) * Math.floor(RACK_DEPTH / effL));
-                
-                // Escolher orientação que maximiza peças. Em caso de empate, preferir a que
-                // coloca o comprimento ao longo do rack (mais natural, menos saliência).
-                let useRot;
-                if (ppl2 > ppl1) {
-                    useRot = true;
-                } else if (ppl1 > ppl2) {
-                    useRot = false;
-                } else {
-                    // Empate: preferir comprimento no eixo 1260 se couber
-                    const cabe1 = comprimento <= RACK_LENGTH;
-                    const cabe2 = profundidade <= RACK_LENGTH;
-                    if (cabe1 && !cabe2) useRot = false;
-                    else if (!cabe1 && cabe2) useRot = true;
-                    else useRot = false;  // default: sem rotação
-                }
-                
-                return {
-                    rotated: useRot,
-                    actL: useRot ? effD : effL,
-                    actD: useRot ? effL : effD,
-                    ppl: useRot ? ppl2 : ppl1,
-                    ppr: useRot ? Math.max(1, Math.floor(RACK_LENGTH / effD)) : Math.max(1, Math.floor(RACK_LENGTH / effL))
-                };
-            }
-            
             ['tabuleiro', 'tabua', 'barrote', 'tabua_longa', 'barrote_longo'].forEach(catKey => {
                 let items = byCat[catKey];
                 if (items.length === 0) return;
@@ -1609,6 +1604,20 @@
             document.getElementById('results').style.display = 'block';
             document.getElementById('totalRacks').textContent = racks.length;
             
+            // Libertar TODOS os contextos WebGL antigos antes de redesenhar
+            // (evita "Too many active WebGL contexts" depois de várias mudanças manuais)
+            Object.keys(rack3DRegistry).forEach(rackId => {
+                try {
+                    const old = rack3DRegistry[rackId];
+                    if (old && old.renderer) {
+                        old.renderer.dispose();
+                        const ext = old.renderer.getContext().getExtension('WEBGL_lose_context');
+                        if (ext) ext.loseContext();
+                    }
+                } catch (e) { /* ignore */ }
+            });
+            for (const k in rack3DRegistry) delete rack3DRegistry[k];
+            
             const container = document.getElementById('racksContainer');
             container.innerHTML = '';
             
@@ -1773,28 +1782,6 @@
                 
                 container.appendChild(div);
                 
-                // Adicionar drop zone visível acima do rack quando modo manual está ativo
-                if (manualEditMode) {
-                    const dropZone = document.createElement('div');
-                    dropZone.className = 'rack-drop-zone';
-                    dropZone.setAttribute('data-target-rack-id', rack.id);
-                    dropZone.style.cssText = `
-                        margin-top: 12px;
-                        padding: 18px;
-                        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-                        border: 3px dashed #f59e0b;
-                        border-radius: 12px;
-                        text-align: center;
-                        font-weight: 700;
-                        color: #78350f;
-                        font-size: 1em;
-                        transition: all 0.15s;
-                    `;
-                    dropZone.innerHTML = `📥 Largue aqui para mover para Rack #${rack.id}`;
-                    // Inserir antes do rack
-                    container.insertBefore(dropZone, div);
-                }
-                
                 setTimeout(() => render3DRack(rack), 100);
             });
             
@@ -1832,44 +1819,33 @@
         }
         
         function applyDragHandlers() {
-            // Configurar drop zones (zonas amarelas explícitas acima de cada rack)
-            document.querySelectorAll('.rack-drop-zone').forEach(zone => {
-                const targetId = parseInt(zone.getAttribute('data-target-rack-id'));
-                
-                zone.ondragover = (e) => {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = 'move';
-                    zone.style.background = 'linear-gradient(135deg, #fde68a 0%, #fbbf24 100%)';
-                    zone.style.transform = 'scale(1.02)';
-                };
-                zone.ondragleave = () => {
-                    zone.style.background = 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)';
-                    zone.style.transform = '';
-                };
-                zone.ondrop = (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    zone.style.background = 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)';
-                    zone.style.transform = '';
-                    let data;
-                    try {
-                        const raw = e.dataTransfer.getData('text/plain') || '{}';
-                        data = JSON.parse(raw);
-                    } catch (err) {
-                        console.warn('drop parse error', err);
-                        return;
-                    }
-                    if (data.fromRackId !== undefined && data.dimKey) {
-                        if (data.fromRackId === targetId) return;  // mesmo rack
-                        moveDimensionGroup(data.fromRackId, targetId, data.dimKey, data.qty || 1);
-                    }
-                };
-            });
-            
-            // Tornar cada linha draggable
+            // Tornar cada linha da tabela "Detalhamento por Dimensão" arrastável
+            // (mantemos drag-and-drop como alternativa ao botão ↪️ — útil entre racks vizinhos)
             document.querySelectorAll('.rack-card').forEach((card, rackIdx) => {
                 const rack = currentRacksData[rackIdx];
                 if (!rack) return;
+                
+                // Card como drop target (simples — sem drop zone separada)
+                card.ondragover = (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    card.style.boxShadow = '0 0 0 3px #fbbf24';
+                };
+                card.ondragleave = () => {
+                    card.style.boxShadow = '';
+                };
+                card.ondrop = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    card.style.boxShadow = '';
+                    let data;
+                    try {
+                        data = JSON.parse(e.dataTransfer.getData('text/plain') || '{}');
+                    } catch (err) { return; }
+                    if (data.fromRackId !== undefined && data.dimKey && data.fromRackId !== rack.id) {
+                        moveDimensionGroup(data.fromRackId, rack.id, data.dimKey, data.qty || 1);
+                    }
+                };
                 
                 const rows = card.querySelectorAll('.detail-table tbody tr');
                 rows.forEach(row => {
@@ -1888,29 +1864,12 @@
                         e.dataTransfer.setData('text/plain', payload);
                         e.dataTransfer.effectAllowed = 'move';
                         row.style.opacity = '0.4';
-                        // Realçar todas as drop zones
-                        document.querySelectorAll('.rack-drop-zone').forEach(z => {
-                            if (parseInt(z.getAttribute('data-target-rack-id')) !== rack.id) {
-                                z.style.borderColor = '#10b981';
-                                z.style.background = 'linear-gradient(135deg, #d1fae5 0%, #86efac 100%)';
-                            }
-                        });
-                        // Mostrar painel flutuante com TODOS os racks (atalho rápido)
-                        showQuickMovePanel(rack.id, dimKey, qty, row);
                     };
                     row.ondragend = () => {
                         row.style.opacity = '1';
-                        // Reset visual das drop zones
-                        document.querySelectorAll('.rack-drop-zone').forEach(z => {
-                            z.style.borderColor = '#f59e0b';
-                            z.style.background = 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)';
-                            z.style.transform = '';
-                        });
-                        // Esconder painel rápido
-                        hideQuickMovePanel();
                     };
                     
-                    // Adicionar botão "Mover →" alternativo (não precisa arrastar)
+                    // Botão ↪️ "Mover para…" (atalho rápido sem arrastar)
                     if (!row.querySelector('.btn-quick-move')) {
                         const moveBtn = document.createElement('button');
                         moveBtn.className = 'btn-quick-move';
@@ -1953,7 +1912,6 @@
                 s.textContent = `
                     .detail-table tbody tr[draggable="true"]:hover {
                         background: #fef3c7 !important;
-                        outline: 2px dashed #f59e0b;
                     }
                     .detail-table tbody tr[draggable="true"]:active {
                         cursor: grabbing !important;
@@ -2383,12 +2341,29 @@
             alert('✅ Novo projeto iniciado!');
         }
         
-        // Registo de instâncias Three.js por rackId — usado para re-renderizar em tamanhos diferentes para o PDF
-        const rack3DRegistry = {};
-        
         function render3DRack(rack) {
             const container = document.getElementById(`rack3d-${rack.id}`);
             if (!container) return;
+            
+            // Libertar contexto WebGL antigo se existir (evita overflow)
+            if (rack3DRegistry[rack.id]) {
+                try {
+                    const old = rack3DRegistry[rack.id];
+                    if (old.renderer) {
+                        old.renderer.dispose();
+                        const ext = old.renderer.getContext().getExtension('WEBGL_lose_context');
+                        if (ext) ext.loseContext();
+                        if (old.renderer.domElement && old.renderer.domElement.parentNode) {
+                            old.renderer.domElement.parentNode.removeChild(old.renderer.domElement);
+                        }
+                    }
+                } catch (e) { /* ignore */ }
+                delete rack3DRegistry[rack.id];
+            }
+            
+            // Limpar canvas dentro do container (caso tenha resíduos)
+            const oldCanvases = container.querySelectorAll('canvas');
+            oldCanvases.forEach(c => c.remove());
             
             const scene = new THREE.Scene();
             scene.background = new THREE.Color(0x1e293b);

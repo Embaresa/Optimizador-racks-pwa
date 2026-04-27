@@ -666,7 +666,7 @@
 <a href="index.html" class="pwa-home-btn" title="Voltar ao menu">← Menu</a>
     <div class="container">
         <div class="header">
-            <h1>🗂️ Otimizador de Racks <span id="versionBadge" style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v43</span></h1>
+            <h1>🗂️ Otimizador de Racks <span id="versionBadge" style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v45</span></h1>
             <p>Sistema Inteligente de Organização de Material</p>
         </div>
         
@@ -1772,12 +1772,36 @@
                 `;
                 
                 container.appendChild(div);
+                
+                // Adicionar drop zone visível acima do rack quando modo manual está ativo
+                if (manualEditMode) {
+                    const dropZone = document.createElement('div');
+                    dropZone.className = 'rack-drop-zone';
+                    dropZone.setAttribute('data-target-rack-id', rack.id);
+                    dropZone.style.cssText = `
+                        margin-top: 12px;
+                        padding: 18px;
+                        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+                        border: 3px dashed #f59e0b;
+                        border-radius: 12px;
+                        text-align: center;
+                        font-weight: 700;
+                        color: #78350f;
+                        font-size: 1em;
+                        transition: all 0.15s;
+                    `;
+                    dropZone.innerHTML = `📥 Largue aqui para mover para Rack #${rack.id}`;
+                    // Inserir antes do rack
+                    container.insertBefore(dropZone, div);
+                }
+                
                 setTimeout(() => render3DRack(rack), 100);
             });
             
             // Aplicar drag-and-drop se modo manual estiver ativo
+            // (depois do 3D para ter a certeza que tudo está no DOM)
             if (manualEditMode) {
-                applyDragHandlers();
+                setTimeout(() => applyDragHandlers(), 200);
             }
             
             document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
@@ -1808,51 +1832,82 @@
         }
         
         function applyDragHandlers() {
-            // Para cada linha de detalhamento (peça), torná-la draggable
+            // Configurar drop zones (zonas amarelas explícitas acima de cada rack)
+            document.querySelectorAll('.rack-drop-zone').forEach(zone => {
+                const targetId = parseInt(zone.getAttribute('data-target-rack-id'));
+                
+                zone.ondragover = (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    zone.style.background = 'linear-gradient(135deg, #fde68a 0%, #fbbf24 100%)';
+                    zone.style.transform = 'scale(1.02)';
+                };
+                zone.ondragleave = () => {
+                    zone.style.background = 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)';
+                    zone.style.transform = '';
+                };
+                zone.ondrop = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    zone.style.background = 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)';
+                    zone.style.transform = '';
+                    let data;
+                    try {
+                        const raw = e.dataTransfer.getData('text/plain') || '{}';
+                        data = JSON.parse(raw);
+                    } catch (err) {
+                        console.warn('drop parse error', err);
+                        return;
+                    }
+                    if (data.fromRackId !== undefined && data.dimKey) {
+                        if (data.fromRackId === targetId) return;  // mesmo rack
+                        moveDimensionGroup(data.fromRackId, targetId, data.dimKey, data.qty || 1);
+                    }
+                };
+            });
+            
+            // Tornar cada linha draggable
             document.querySelectorAll('.rack-card').forEach((card, rackIdx) => {
                 const rack = currentRacksData[rackIdx];
                 if (!rack) return;
                 
-                // Tornar o card um drop target
-                card.setAttribute('data-rack-id', rack.id);
-                card.style.transition = 'background 0.15s';
-                card.addEventListener('dragover', (e) => {
-                    e.preventDefault();
-                    card.style.background = '#fef3c7';
-                });
-                card.addEventListener('dragleave', () => {
-                    card.style.background = '';
-                });
-                card.addEventListener('drop', (e) => {
-                    e.preventDefault();
-                    card.style.background = '';
-                    const data = JSON.parse(e.dataTransfer.getData('application/json') || '{}');
-                    if (data.fromRackId !== undefined && data.dimKey) {
-                        moveDimensionGroup(data.fromRackId, rack.id, data.dimKey, data.qty || 1);
-                    }
-                });
-                
-                // Tornar cada linha da tabela de dimensões draggable
                 const rows = card.querySelectorAll('.detail-table tbody tr');
                 rows.forEach(row => {
-                    row.draggable = true;
+                    row.setAttribute('draggable', 'true');
                     row.style.cursor = 'grab';
-                    row.addEventListener('dragstart', (e) => {
+                    row.style.userSelect = 'none';
+                    
+                    row.ondragstart = (e) => {
                         const dimKey = row.getAttribute('data-dim');
                         const qty = parseInt(row.getAttribute('data-qty') || '1');
-                        e.dataTransfer.setData('application/json', JSON.stringify({
+                        const payload = JSON.stringify({
                             fromRackId: rack.id,
                             dimKey: dimKey,
                             qty: qty
-                        }));
+                        });
+                        e.dataTransfer.setData('text/plain', payload);
+                        e.dataTransfer.effectAllowed = 'move';
                         row.style.opacity = '0.4';
-                    });
-                    row.addEventListener('dragend', () => {
+                        // Realçar todas as drop zones
+                        document.querySelectorAll('.rack-drop-zone').forEach(z => {
+                            if (parseInt(z.getAttribute('data-target-rack-id')) !== rack.id) {
+                                z.style.borderColor = '#10b981';
+                                z.style.background = 'linear-gradient(135deg, #d1fae5 0%, #86efac 100%)';
+                            }
+                        });
+                    };
+                    row.ondragend = () => {
                         row.style.opacity = '1';
-                    });
+                        // Reset visual das drop zones
+                        document.querySelectorAll('.rack-drop-zone').forEach(z => {
+                            z.style.borderColor = '#f59e0b';
+                            z.style.background = 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)';
+                            z.style.transform = '';
+                        });
+                    };
                 });
                 
-                // Adicionar botão eliminar rack se vazio
+                // Botão eliminar rack se vazio
                 if (rack.items.length === 0) {
                     const header = card.querySelector('.rack-header');
                     if (header && !card.querySelector('.btn-delete-rack')) {
@@ -1868,6 +1923,23 @@
                     }
                 }
             });
+            
+            // CSS hover nas linhas
+            const style = document.getElementById('dragStyle');
+            if (!style) {
+                const s = document.createElement('style');
+                s.id = 'dragStyle';
+                s.textContent = `
+                    .detail-table tbody tr[draggable="true"]:hover {
+                        background: #fef3c7 !important;
+                        outline: 2px dashed #f59e0b;
+                    }
+                    .detail-table tbody tr[draggable="true"]:active {
+                        cursor: grabbing !important;
+                    }
+                `;
+                document.head.appendChild(s);
+            }
         }
         
         // Mover todas as peças de uma dimensão de um rack para outro

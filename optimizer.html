@@ -666,7 +666,7 @@
 <a href="index.html" class="pwa-home-btn" title="Voltar ao menu">← Menu</a>
     <div class="container">
         <div class="header">
-            <h1>🗂️ Otimizador de Racks <span id="versionBadge" style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v45</span></h1>
+            <h1>🗂️ Otimizador de Racks <span id="versionBadge" style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v46</span></h1>
             <p>Sistema Inteligente de Organização de Material</p>
         </div>
         
@@ -1895,6 +1895,8 @@
                                 z.style.background = 'linear-gradient(135deg, #d1fae5 0%, #86efac 100%)';
                             }
                         });
+                        // Mostrar painel flutuante com TODOS os racks (atalho rápido)
+                        showQuickMovePanel(rack.id, dimKey, qty, row);
                     };
                     row.ondragend = () => {
                         row.style.opacity = '1';
@@ -1904,7 +1906,26 @@
                             z.style.background = 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)';
                             z.style.transform = '';
                         });
+                        // Esconder painel rápido
+                        hideQuickMovePanel();
                     };
+                    
+                    // Adicionar botão "Mover →" alternativo (não precisa arrastar)
+                    if (!row.querySelector('.btn-quick-move')) {
+                        const moveBtn = document.createElement('button');
+                        moveBtn.className = 'btn-quick-move';
+                        moveBtn.textContent = '↪️';
+                        moveBtn.title = 'Mover para outro rack';
+                        moveBtn.style.cssText = 'background:#3b82f6; color:#fff; border:none; padding:2px 6px; border-radius:4px; cursor:pointer; font-size:0.8em; margin-left:8px;';
+                        moveBtn.onclick = (ev) => {
+                            ev.stopPropagation();
+                            const dimKey = row.getAttribute('data-dim');
+                            const qty = parseInt(row.getAttribute('data-qty') || '1');
+                            showRackPickerDialog(rack.id, dimKey, qty);
+                        };
+                        const firstCell = row.querySelector('td');
+                        if (firstCell) firstCell.appendChild(moveBtn);
+                    }
                 });
                 
                 // Botão eliminar rack se vazio
@@ -2044,6 +2065,98 @@
                 if (h >= alturaTotal) { rack.height = h; break; }
             }
         }
+        
+        // Diálogo modal "para onde mover" — quando clicar no ↪️
+        function showRackPickerDialog(fromRackId, dimKey, qty) {
+            const otherRacks = currentRacksData.filter(r => r.id !== fromRackId);
+            
+            const overlay = document.createElement('div');
+            overlay.id = 'rackPickerOverlay';
+            overlay.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:10000; display:flex; align-items:center; justify-content:center; padding:20px;';
+            
+            const dialog = document.createElement('div');
+            dialog.style.cssText = 'background:#fff; border-radius:16px; max-width:600px; width:100%; max-height:80vh; overflow-y:auto; padding:24px; box-shadow:0 20px 60px rgba(0,0,0,0.3);';
+            
+            let html = `
+                <div style="font-size:1.3em; font-weight:800; color:#1e293b; margin-bottom:8px;">
+                    📥 Para onde mover?
+                </div>
+                <div style="color:#64748b; margin-bottom:18px; font-size:0.9em;">
+                    A mover <strong>${qty} peças</strong> de <strong>${dimKey} mm</strong> do <strong>Rack #${fromRackId}</strong>
+                </div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:10px;">
+            `;
+            otherRacks.forEach(r => {
+                const catName = catNameFor(r.category);
+                const passoBadge = r.passo === 'global' ? ' 🌐'
+                    : r.passo === 'base' ? ' 1️⃣'
+                    : (r.passo === 'laterais' || r.passo === 'lattampa') ? ' 2️⃣'
+                    : r.passo === 'tampa' ? ' 3️⃣'
+                    : '';
+                html += `
+                    <button onclick="confirmMoveTo(${fromRackId}, ${r.id}, '${dimKey}', ${qty})"
+                            style="background:#3b82f6; color:#fff; border:none; padding:14px; border-radius:10px; cursor:pointer; font-weight:700; text-align:left; transition:all 0.15s;"
+                            onmouseover="this.style.background='#2563eb'"
+                            onmouseout="this.style.background='#3b82f6'">
+                        <div style="font-size:1.1em;">Rack #${r.id}${passoBadge}</div>
+                        <div style="font-size:0.8em; opacity:0.9; margin-top:2px;">${catName} · ${r.items.length} peças</div>
+                    </button>
+                `;
+            });
+            html += `
+                </div>
+                <button onclick="confirmMoveToNew(${fromRackId}, '${dimKey}', ${qty})"
+                        style="margin-top:16px; background:#10b981; color:#fff; border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:700; width:100%; font-size:1em;">
+                    ➕ Criar Novo Rack para Estas Peças
+                </button>
+                <button onclick="closeRackPicker()"
+                        style="margin-top:8px; background:#e5e7eb; color:#1f2937; border:none; padding:10px; border-radius:10px; cursor:pointer; font-weight:600; width:100%;">
+                    Cancelar
+                </button>
+            `;
+            dialog.innerHTML = html;
+            overlay.appendChild(dialog);
+            overlay.onclick = (e) => { if (e.target === overlay) closeRackPicker(); };
+            document.body.appendChild(overlay);
+        }
+        
+        function catNameFor(cat) {
+            if (cat === 'tabuleiro') return 'OSB';
+            if (cat === 'tabua') return 'Tábuas';
+            if (cat === 'tabua_longa') return 'Tábuas Longas';
+            if (cat === 'barrote') return 'Barrotes';
+            if (cat === 'barrote_longo') return 'Largueros';
+            return cat;
+        }
+        
+        function closeRackPicker() {
+            const ov = document.getElementById('rackPickerOverlay');
+            if (ov) ov.remove();
+        }
+        
+        function confirmMoveTo(fromId, toId, dimKey, qty) {
+            closeRackPicker();
+            moveDimensionGroup(fromId, toId, dimKey, qty);
+        }
+        
+        function confirmMoveToNew(fromId, dimKey, qty) {
+            closeRackPicker();
+            const newId = Math.max(0, ...currentRacksData.map(r => r.id)) + 1;
+            const fromRack = currentRacksData.find(r => r.id === fromId);
+            const newRack = {
+                id: newId,
+                height: AVAILABLE_HEIGHTS[0],
+                items: [],
+                category: (fromRack && fromRack.category) || 'tabuleiro',
+                layers: [],
+                passo: (fromRack && fromRack.passo) || null
+            };
+            currentRacksData.push(newRack);
+            moveDimensionGroup(fromId, newId, dimKey, qty);
+        }
+        
+        function showQuickMovePanel() {}  // placeholder
+        function hideQuickMovePanel() {}  // placeholder
         
         function addEmptyRack() {
             // Adicionar rack vazio - utilizador define categoria depois ao mover peças

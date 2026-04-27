@@ -418,7 +418,7 @@ input[type="number"].qty {
 <a href="index.html" class="pwa-home-btn" title="Voltar ao menu">← Menu</a>
 <div class="container">
     <div class="header">
-        <h1>🔄 Conversor OT → Otimizador de Racks <span style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v41</span></h1>
+        <h1>🔄 Conversor OT → Otimizador de Racks <span style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v43</span></h1>
         <p>Extrai matriz de produtos de Ordens de Trabalho (PDF) e gera Excel para o otimizador</p>
     </div>
 
@@ -524,8 +524,12 @@ input[type="number"].qty {
                         style="background:#fbbf24; color:#78350f; font-weight:600;">
                     ✨ Auto-Atribuir Passos
                 </button>
+                <button class="btn btn-success" onclick="sendToOptimizer()" id="btnSendOpt"
+                        style="background:#3b82f6; color:#fff; font-weight:700;">
+                    🚀 Avançar para Otimizador
+                </button>
                 <button class="btn btn-success" onclick="exportExcel()" id="btnExcel">
-                    📊 Exportar Excel (formato otimizador)
+                    📊 Exportar Excel
                 </button>
                 <button class="btn btn-primary" onclick="exportJSON()">
                     💾 Exportar JSON
@@ -1295,6 +1299,46 @@ function dividirTodas() {
 // =============================================================================
 // EXPORT
 // =============================================================================
+
+// Envia produtos diretamente para o otimizador via sessionStorage
+function sendToOptimizer() {
+    const incluir = products.filter(p => p.incluir);
+    if (incluir.length === 0) return toast('Nenhum produto selecionado', 'error');
+    
+    // Construir payload com mesma estrutura que o otimizador espera
+    const payload = {
+        version: 'converter-handoff-1',
+        timestamp: new Date().toISOString(),
+        ot: otMeta.ot || '',
+        unidades: otMeta.unidades || 4,
+        produtos: incluir.map((p, idx) => ({
+            id: idx,
+            referencia: p.referencia,
+            categoria: p.categoria,
+            comprimento: p.largo,
+            profundidade: p.ancho,
+            espessura: p.alto,
+            quantidade: p.cant,
+            multiplicador: 1,
+            passo: p.passo || null,
+            nome: p.nome
+        }))
+    };
+    
+    try {
+        sessionStorage.setItem('handoffOptimizer', JSON.stringify(payload));
+    } catch (e) {
+        toast('Erro ao guardar dados: ' + e.message, 'error');
+        return;
+    }
+    
+    toast(`✅ ${incluir.length} produtos enviados. A abrir otimizador...`, 'success');
+    
+    // Abrir otimizador no mesmo separador
+    setTimeout(() => {
+        window.location.href = 'optimizer.html?from=converter';
+    }, 600);
+}
 
 function exportExcel() {
     const incluir = products.filter(p => p.incluir);

@@ -666,7 +666,7 @@
 <a href="index.html" class="pwa-home-btn" title="Voltar ao menu">← Menu</a>
     <div class="container">
         <div class="header">
-            <h1>🗂️ Otimizador de Racks <span id="versionBadge" style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v41</span></h1>
+            <h1>🗂️ Otimizador de Racks <span id="versionBadge" style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v43</span></h1>
             <p>Sistema Inteligente de Organização de Material</p>
         </div>
         
@@ -876,6 +876,10 @@
                         <div class="total-racks" id="totalRacks">0</div>
                     </div>
                     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
+                        <button onclick="toggleManualEdit()" id="btnManualEdit" class="btn btn-primary"
+                                style="padding: 12px 20px; font-size: 0.9em; background:#fbbf24; color:#78350f;">
+                            ✏️ Edição Manual
+                        </button>
                         <button onclick="generatePDF(false)" class="btn btn-success" style="padding: 12px 20px; font-size: 0.9em;">
                             📄 Gerar PDF
                         </button>
@@ -884,6 +888,23 @@
                         </button>
                     </div>
                 </div>
+                
+                <!-- Painel de edição manual -->
+                <div id="manualEditPanel" style="display:none; background:#fef3c7; border:1px solid #f59e0b; border-radius:12px; padding:14px; margin-bottom:16px;">
+                    <div style="font-weight:700; color:#92400e; margin-bottom:6px;">✏️ Modo Edição Manual</div>
+                    <div style="font-size:0.88em; color:#78350f; margin-bottom:10px;">
+                        Arraste peças entre racks. Pode criar racks novos ou eliminar vazios. Tudo recalcula automaticamente.
+                    </div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <button onclick="addEmptyRack()" class="btn-secondary" style="background:#86efac;">
+                            ➕ Novo Rack Vazio
+                        </button>
+                        <button onclick="reoptimizeFromScratch()" class="btn-secondary" style="background:#fda4af;">
+                            🔄 Recomeçar (otimização automática)
+                        </button>
+                    </div>
+                </div>
+                
                 <div id="racksContainer"></div>
             </div>
         </div>
@@ -893,6 +914,7 @@
         const RACK_LENGTH = 1260;
         const RACK_DEPTH = 810;
         const AVAILABLE_HEIGHTS = [400, 600, 800, 1000, 1200];
+        const TOL_ESPESSURA = 0;
         
         let allProducts = [];
         let filteredProducts = [];
@@ -901,8 +923,51 @@
         
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('projectDate').value = new Date().toISOString().split('T')[0];
+            
+            // Verificar se há dados vindos do conversor
+            try {
+                const handoff = sessionStorage.getItem('handoffOptimizer');
+                if (handoff) {
+                    const payload = JSON.parse(handoff);
+                    if (payload && Array.isArray(payload.produtos) && payload.produtos.length > 0) {
+                        // Carregar produtos
+                        allProducts = payload.produtos.map((p, i) => ({
+                            id: i,
+                            referencia: p.referencia || '',
+                            categoria: p.categoria || 'tabuleiro',
+                            comprimento: Number(p.comprimento) || 0,
+                            profundidade: Number(p.profundidade) || 0,
+                            espessura: Number(p.espessura) || 0,
+                            quantidade: Number(p.quantidade) || 1,
+                            multiplicador: Number(p.multiplicador) || 1,
+                            passo: p.passo || null,
+                            selected: true,
+                            nome: p.nome || ''
+                        }));
+                        filteredProducts = [...allProducts];
+                        
+                        // Mostrar UI de seleção
+                        document.getElementById('productSelection').style.display = 'block';
+                        document.getElementById('successMessage').style.display = 'block';
+                        document.getElementById('successMessage').innerHTML = 
+                            `<div class="success-badge">✅ ${allProducts.length} produtos recebidos do Conversor (OT ${payload.ot || '—'})</div>`;
+                        document.getElementById('fileName').textContent = `Direto do Conversor · OT ${payload.ot || '—'}`;
+                        
+                        renderProductTable();
+                        
+                        // Limpar handoff (consumido)
+                        sessionStorage.removeItem('handoffOptimizer');
+                        
+                        // Scroll até à secção de produtos
+                        setTimeout(() => {
+                            document.getElementById('productSelection').scrollIntoView({ behavior: 'smooth' });
+                        }, 300);
+                    }
+                }
+            } catch (e) {
+                console.warn('Erro ao ler handoff:', e);
+            }
         });
-        
         function onProjectNameChange(val) {
             const freeTextInput = document.getElementById('projectName');
             if (val === '__custom__') {
@@ -1221,10 +1286,7 @@
             const racks = [];
             let rackId = 1;
             
-            // Tolerância de espessura: peças com espessura ≤ esta diferença podem partilhar layer
-            // (útil para espessuras 12 vs 15 vs 18 — caso queira igualar)
-            // Por defeito 0 = só peças com espessura IGUAL
-            const TOL_ESPESSURA = 0;
+            // Tolerância de espessura: usa TOL_ESPESSURA global (definida no topo)
             
             // Calcula quantos "slots" cabem dada uma dimensão de slot e as dimensões da peça
             function calcularSlots(slotL, slotD, pieceL, pieceD) {
@@ -1646,7 +1708,7 @@
                     const totalHeight = numLayers * first.espessura;
                     
                     tableHTML += `
-                        <tr>
+                        <tr data-dim="${dimKey}" data-qty="${items.length}" title="Arraste para outro rack para mover estas peças">
                             <td style="font-weight: 700;">${first.comprimento} × ${first.profundidade} × ${first.espessura}</td>
                             <td style="font-weight: 700; color: #3b82f6;">${items.length}</td>
                             <td>${ppr}</td>
@@ -1713,7 +1775,235 @@
                 setTimeout(() => render3DRack(rack), 100);
             });
             
+            // Aplicar drag-and-drop se modo manual estiver ativo
+            if (manualEditMode) {
+                applyDragHandlers();
+            }
+            
             document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        // =============================================================================
+        // EDIÇÃO MANUAL DE RACKS (v42)
+        // =============================================================================
+        let manualEditMode = false;
+        
+        function toggleManualEdit() {
+            manualEditMode = !manualEditMode;
+            const panel = document.getElementById('manualEditPanel');
+            const btn = document.getElementById('btnManualEdit');
+            if (manualEditMode) {
+                panel.style.display = 'block';
+                btn.textContent = '✅ Sair do Modo Edição';
+                btn.style.background = '#86efac';
+                btn.style.color = '#14532d';
+            } else {
+                panel.style.display = 'none';
+                btn.textContent = '✏️ Edição Manual';
+                btn.style.background = '#fbbf24';
+                btn.style.color = '#78350f';
+            }
+            // Re-render para aplicar/remover drag handles
+            displayResults(currentRacksData);
+        }
+        
+        function applyDragHandlers() {
+            // Para cada linha de detalhamento (peça), torná-la draggable
+            document.querySelectorAll('.rack-card').forEach((card, rackIdx) => {
+                const rack = currentRacksData[rackIdx];
+                if (!rack) return;
+                
+                // Tornar o card um drop target
+                card.setAttribute('data-rack-id', rack.id);
+                card.style.transition = 'background 0.15s';
+                card.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    card.style.background = '#fef3c7';
+                });
+                card.addEventListener('dragleave', () => {
+                    card.style.background = '';
+                });
+                card.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    card.style.background = '';
+                    const data = JSON.parse(e.dataTransfer.getData('application/json') || '{}');
+                    if (data.fromRackId !== undefined && data.dimKey) {
+                        moveDimensionGroup(data.fromRackId, rack.id, data.dimKey, data.qty || 1);
+                    }
+                });
+                
+                // Tornar cada linha da tabela de dimensões draggable
+                const rows = card.querySelectorAll('.detail-table tbody tr');
+                rows.forEach(row => {
+                    row.draggable = true;
+                    row.style.cursor = 'grab';
+                    row.addEventListener('dragstart', (e) => {
+                        const dimKey = row.getAttribute('data-dim');
+                        const qty = parseInt(row.getAttribute('data-qty') || '1');
+                        e.dataTransfer.setData('application/json', JSON.stringify({
+                            fromRackId: rack.id,
+                            dimKey: dimKey,
+                            qty: qty
+                        }));
+                        row.style.opacity = '0.4';
+                    });
+                    row.addEventListener('dragend', () => {
+                        row.style.opacity = '1';
+                    });
+                });
+                
+                // Adicionar botão eliminar rack se vazio
+                if (rack.items.length === 0) {
+                    const header = card.querySelector('.rack-header');
+                    if (header && !card.querySelector('.btn-delete-rack')) {
+                        const btn = document.createElement('button');
+                        btn.className = 'btn-delete-rack';
+                        btn.textContent = '🗑️ Eliminar Rack';
+                        btn.style.cssText = 'background:#fca5a5; color:#7f1d1d; border:none; padding:6px 12px; border-radius:6px; font-weight:700; cursor:pointer; margin-left:auto;';
+                        btn.onclick = (ev) => {
+                            ev.stopPropagation();
+                            deleteRack(rack.id);
+                        };
+                        header.appendChild(btn);
+                    }
+                }
+            });
+        }
+        
+        // Mover todas as peças de uma dimensão de um rack para outro
+        function moveDimensionGroup(fromRackId, toRackId, dimKey, qty) {
+            if (fromRackId === toRackId) return;
+            const fromRack = currentRacksData.find(r => r.id === fromRackId);
+            const toRack = currentRacksData.find(r => r.id === toRackId);
+            if (!fromRack || !toRack) return;
+            
+            // Filtrar peças com a dimensão pretendida
+            const itemsToMove = fromRack.items.filter(it => {
+                const k = `${it.comprimento}x${it.profundidade}x${it.espessura}`;
+                return k === dimKey;
+            });
+            if (itemsToMove.length === 0) return;
+            
+            // Remover do origem
+            fromRack.items = fromRack.items.filter(it => {
+                const k = `${it.comprimento}x${it.profundidade}x${it.espessura}`;
+                return k !== dimKey;
+            });
+            // Adicionar ao destino
+            toRack.items.push(...itemsToMove);
+            
+            // Recalcular ambos
+            recalcRack(fromRack);
+            recalcRack(toRack);
+            
+            // Se origem ficou vazio, manter (utilizador pode eliminar com botão)
+            displayResults(currentRacksData);
+        }
+        
+        // Recalcular layers, altura e ocupação de um rack após mexer
+        function recalcRack(rack) {
+            // Re-empilhar todas as peças do zero usando as mesmas regras de optimizeRacksSinglePass
+            // mas só para este rack (preserva category, diagonal, passo)
+            if (rack.items.length === 0) {
+                rack.layers = [];
+                rack.height = AVAILABLE_HEIGHTS[0];
+                return;
+            }
+            
+            // Reagrupar items por dimensão e re-empilhar (com layer-sharing)
+            const items = [...rack.items];
+            // Ordenar por área de base decrescente, depois espessura
+            items.sort((a, b) => {
+                const aArea = a.comprimento * a.profundidade;
+                const bArea = b.comprimento * b.profundidade;
+                if (bArea !== aArea) return bArea - aArea;
+                return b.espessura - a.espessura;
+            });
+            
+            const layers = [];
+            items.forEach(item => {
+                const orient = melhorOrientacao(item.comprimento, item.profundidade, rack.category);
+                item.rotated = orient.rotated;
+                item.actL = orient.actL;
+                item.actD = orient.actD;
+                
+                // Tentar partilhar com layer existente (mesma espessura + cabe em slot)
+                let placed = false;
+                for (const layer of layers) {
+                    if (Math.abs(layer.height - item.espessura) > TOL_ESPESSURA) continue;
+                    // Cabe em slot livre desta layer? Para simplificar usamos lógica de "próximo slot"
+                    const slotIdx = layer.usedArea.length;
+                    const ppl = orient.ppl;
+                    if (slotIdx < ppl) {
+                        const ppr = orient.ppr;
+                        const row = Math.floor(slotIdx / ppr);
+                        const col = slotIdx % ppr;
+                        item.x = col * orient.actL;
+                        item.y = row * orient.actD;
+                        item.z = layer.z;
+                        layer.usedArea.push(item);
+                        placed = true;
+                        break;
+                    }
+                }
+                if (!placed) {
+                    // Nova layer
+                    const z = layers.length > 0 ? layers[layers.length - 1].z + layers[layers.length - 1].height : 0;
+                    item.x = 0;
+                    item.y = 0;
+                    item.z = z;
+                    layers.push({
+                        z: z,
+                        height: item.espessura,
+                        usedArea: [item],
+                        ppl: orient.ppl,
+                        ppr: orient.ppr,
+                        actL: orient.actL,
+                        actD: orient.actD
+                    });
+                }
+            });
+            
+            rack.layers = layers;
+            
+            // Ajustar altura do rack à altura ocupada
+            const alturaTotal = layers.length > 0 ? layers[layers.length - 1].z + layers[layers.length - 1].height : 0;
+            for (const h of AVAILABLE_HEIGHTS) {
+                if (h >= alturaTotal) { rack.height = h; break; }
+            }
+        }
+        
+        function addEmptyRack() {
+            // Adicionar rack vazio - utilizador define categoria depois ao mover peças
+            const newId = Math.max(0, ...currentRacksData.map(r => r.id)) + 1;
+            const newRack = {
+                id: newId,
+                height: AVAILABLE_HEIGHTS[0],
+                items: [],
+                category: 'tabuleiro',  // categoria por defeito
+                layers: [],
+                passo: null
+            };
+            currentRacksData.push(newRack);
+            displayResults(currentRacksData);
+        }
+        
+        function deleteRack(rackId) {
+            const rack = currentRacksData.find(r => r.id === rackId);
+            if (!rack) return;
+            if (rack.items.length > 0) {
+                if (!confirm(`Rack #${rackId} tem ${rack.items.length} peças. Eliminar mesmo assim?`)) return;
+            }
+            currentRacksData = currentRacksData.filter(r => r.id !== rackId);
+            // Renumerar IDs
+            currentRacksData.forEach((r, i) => { r.id = i + 1; });
+            displayResults(currentRacksData);
+        }
+        
+        function reoptimizeFromScratch() {
+            if (!confirm('Vai descartar todas as alterações manuais e reotimizar automaticamente. Continuar?')) return;
+            const racks = optimizeRacks(allProducts);
+            displayResults(racks);
         }
         
         function saveProject() {

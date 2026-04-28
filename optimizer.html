@@ -8,7 +8,6 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#1d4ed8">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Racks">
     <title>Otimizador de Racks Metálicos</title>
@@ -667,7 +666,7 @@
 <a href="index.html" class="pwa-home-btn" title="Voltar ao menu">← Menu</a>
     <div class="container">
         <div class="header">
-            <h1>🗂️ Otimizador de Racks <span id="versionBadge" style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v48</span></h1>
+            <h1>🗂️ Otimizador de Racks <span id="versionBadge" style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v50</span></h1>
             <p>Sistema Inteligente de Organização de Material</p>
         </div>
         
@@ -1610,10 +1609,15 @@
             Object.keys(rack3DRegistry).forEach(rackId => {
                 try {
                     const old = rack3DRegistry[rackId];
-                    if (old && old.renderer) {
-                        old.renderer.dispose();
-                        const ext = old.renderer.getContext().getExtension('WEBGL_lose_context');
-                        if (ext) ext.loseContext();
+                    if (old) {
+                        // Marcar como disposed para parar animate loop
+                        old.disposed = true;
+                        if (old.animationId) cancelAnimationFrame(old.animationId);
+                        if (old.renderer) {
+                            old.renderer.dispose();
+                            const ext = old.renderer.getContext().getExtension('WEBGL_lose_context');
+                            if (ext) ext.loseContext();
+                        }
                     }
                 } catch (e) { /* ignore */ }
             });
@@ -1783,7 +1787,13 @@
                 
                 container.appendChild(div);
                 
-                setTimeout(() => render3DRack(rack), 100);
+                // Esperar 2 frames de animação antes de renderizar 3D
+                // (garante que o layout CSS já calculou as dimensões finais do container)
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        render3DRack(rack);
+                    });
+                });
             });
             
             // Aplicar drag-and-drop se modo manual estiver ativo
@@ -2342,154 +2352,6 @@
             alert('✅ Novo projeto iniciado!');
         }
         
-        // ===== WebGL availability + 2D fallback =====
-        // Quando o browser não consegue criar contexto WebGL (limite de 16 contextos
-        // por página atingido, GPU bloqueada, aceleração de hardware desligada, etc.),
-        // desenhamos uma vista lateral 2D do rack num <canvas> normal — funciona
-        // sempre e ainda é capturável para o PDF.
-        
-        let _webglAvailableCache = null;
-        function isWebGLAvailable() {
-            if (_webglAvailableCache !== null) return _webglAvailableCache;
-            try {
-                const testCanvas = document.createElement('canvas');
-                const gl = testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl');
-                if (!gl) { _webglAvailableCache = false; return false; }
-                const lose = gl.getExtension('WEBGL_lose_context');
-                if (lose) lose.loseContext();
-                _webglAvailableCache = true;
-                return true;
-            } catch (e) {
-                _webglAvailableCache = false;
-                return false;
-            }
-        }
-        
-        function showFallbackNotice() {
-            const id = 'fallback-3d-notice';
-            if (document.getElementById(id)) return; // já mostrado nesta sessão
-            const target = document.getElementById('racksContainer');
-            if (!target || !target.parentNode) return;
-            const div = document.createElement('div');
-            div.id = id;
-            div.style.cssText = 'background:#fef3c7;border:1px solid #f59e0b;color:#78350f;padding:12px 16px;border-radius:8px;margin-bottom:16px;font-size:0.9em;line-height:1.5;';
-            div.innerHTML = '⚠️ <strong>Visualização 2D activa</strong> — a aceleração 3D não está disponível neste momento (limite de contextos WebGL atingido ou GPU indisponível). As imagens nos PDFs continuam a ser geradas. Recarregue a página (Ctrl+F5) para tentar restaurar o 3D.';
-            target.parentNode.insertBefore(div, target);
-        }
-        
-        // Vista lateral 2D do rack: postes verticais + peças empilhadas a cores.
-        // Devolve a data-URL para reutilização directa no PDF (sem WebGL).
-        function render2DRackFallback(rack, container) {
-            container.innerHTML = '';
-            
-            const canvas = document.createElement('canvas');
-            const cw = container.clientWidth || 800;
-            const ch = container.clientHeight || 400;
-            const dpr = 2; // resolução 2× para nitidez
-            canvas.width = cw * dpr;
-            canvas.height = ch * dpr;
-            canvas.style.width = cw + 'px';
-            canvas.style.height = ch + 'px';
-            container.appendChild(canvas);
-            
-            const ctx = canvas.getContext('2d');
-            ctx.scale(dpr, dpr);
-            
-            // Fundo (mesma cor escura do 3D para coerência visual)
-            ctx.fillStyle = '#1e293b';
-            ctx.fillRect(0, 0, cw, ch);
-            
-            // Layout
-            const margin = 30;
-            const labelSpace = 40;
-            const drawW = cw - 2 * margin;
-            const drawH = ch - 2 * margin - labelSpace;
-            
-            // Escala isométrica simples: comprimento na horizontal, altura na vertical
-            const scaleX = drawW / RACK_LENGTH;
-            const scaleY = drawH / Math.max(rack.height, 100);
-            const scale = Math.min(scaleX, scaleY);
-            
-            const rackPxW = RACK_LENGTH * scale;
-            const rackPxH = rack.height * scale;
-            const offsetX = margin + (drawW - rackPxW) / 2;
-            const offsetY = margin + (drawH - rackPxH);
-            
-            // Postes laterais
-            ctx.strokeStyle = '#94a3b8';
-            ctx.lineWidth = 4;
-            ctx.lineCap = 'round';
-            ctx.beginPath();
-            ctx.moveTo(offsetX, offsetY);
-            ctx.lineTo(offsetX, offsetY + rackPxH);
-            ctx.moveTo(offsetX + rackPxW, offsetY);
-            ctx.lineTo(offsetX + rackPxW, offsetY + rackPxH);
-            ctx.stroke();
-            
-            // Base e topo
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(offsetX - 10, offsetY + rackPxH);
-            ctx.lineTo(offsetX + rackPxW + 10, offsetY + rackPxH);
-            ctx.moveTo(offsetX - 10, offsetY);
-            ctx.lineTo(offsetX + rackPxW + 10, offsetY);
-            ctx.stroke();
-            
-            // Grelha de fundo subtil
-            ctx.strokeStyle = 'rgba(148,163,184,0.15)';
-            ctx.lineWidth = 1;
-            const gridStep = 100 * scale; // a cada 100mm
-            if (gridStep > 8) {
-                for (let y = offsetY + rackPxH; y > offsetY; y -= gridStep) {
-                    ctx.beginPath();
-                    ctx.moveTo(offsetX, y);
-                    ctx.lineTo(offsetX + rackPxW, y);
-                    ctx.stroke();
-                }
-            }
-            
-            // Peças empilhadas — vista lateral, da base para cima
-            let yCursor = offsetY + rackPxH;
-            const items = rack.items || [];
-            items.forEach(item => {
-                const itemLengthMm = Math.max(item.comprimento || 0, item.largura || 0);
-                const itemThicknessMm = Math.max(item.espessura || 10, 1);
-                const itemPxW = Math.min(itemLengthMm * scale, rackPxW);
-                const itemPxH = Math.max(itemThicknessMm * scale, 2);
-                
-                const itemX = offsetX + (rackPxW - itemPxW) / 2;
-                const itemY = yCursor - itemPxH;
-                
-                // Bloco da peça
-                ctx.fillStyle = getCategoryColor(item.categoria);
-                ctx.fillRect(itemX, itemY, itemPxW, itemPxH);
-                // Contorno
-                ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(itemX, itemY, itemPxW, itemPxH);
-                
-                yCursor = itemY;
-            });
-            
-            // Cota de altura à direita
-            ctx.fillStyle = '#cbd5e1';
-            ctx.font = 'bold 11px Inter, sans-serif';
-            ctx.textAlign = 'left';
-            ctx.fillText(`${rack.height}mm`, offsetX + rackPxW + 8, offsetY + rackPxH / 2);
-            
-            // Cota de comprimento em baixo do rack
-            ctx.textAlign = 'center';
-            ctx.fillText(`${RACK_LENGTH}mm`, offsetX + rackPxW / 2, offsetY + rackPxH + 18);
-            
-            // Legenda
-            ctx.fillStyle = '#fbbf24';
-            ctx.font = 'bold 12px Inter, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(`Vista lateral 2D — ${items.length} peças`, cw / 2, ch - 12);
-            
-            return canvas.toDataURL('image/jpeg', 0.85);
-        }
-        
         function render3DRack(rack) {
             const container = document.getElementById(`rack3d-${rack.id}`);
             if (!container) return;
@@ -2498,6 +2360,9 @@
             if (rack3DRegistry[rack.id]) {
                 try {
                     const old = rack3DRegistry[rack.id];
+                    // Cancelar loop de animação antigo
+                    if (old.animationId) cancelAnimationFrame(old.animationId);
+                    old.disposed = true;
                     if (old.renderer) {
                         old.renderer.dispose();
                         const ext = old.renderer.getContext().getExtension('WEBGL_lose_context');
@@ -2514,21 +2379,18 @@
             const oldCanvases = container.querySelectorAll('canvas');
             oldCanvases.forEach(c => c.remove());
             
-            // Se WebGL não está disponível neste browser/sessão, ir direto ao 2D
-            if (!isWebGLAvailable()) {
-                console.warn('render3DRack: WebGL indisponível, usando fallback 2D para rack', rack.id);
-                const dataUrl = render2DRackFallback(rack, container);
-                rack3DRegistry[rack.id] = { type: '2d', dataUrl, rack };
-                showFallbackNotice();
+            // Se container ainda não tem dimensões (ex: dentro de elemento oculto), tentar mais tarde
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            if (width < 50 || height < 50) {
+                // Tentar de novo depois de o layout estabilizar
+                setTimeout(() => render3DRack(rack), 200);
                 return;
             }
             
             const scene = new THREE.Scene();
             scene.background = new THREE.Color(0x1e293b);
             scene.fog = new THREE.Fog(0x1e293b, 3000, 7000);
-            
-            const width = container.clientWidth;
-            const height = container.clientHeight;
             
             const camera = new THREE.PerspectiveCamera(50, width / height, 1, 10000);
             const centerX = RACK_LENGTH / 2;
@@ -2537,31 +2399,20 @@
             camera.position.set(centerX + 1800, centerY + 1200, centerZ + 1800);
             camera.lookAt(centerX, centerY, centerZ);
             
-            // Tentar criar o WebGLRenderer; se falhar (limite de contextos atingido,
-            // perda de contexto, etc.), cair para fallback 2D em vez de morrer em silêncio.
-            let renderer;
-            try {
-                renderer = new THREE.WebGLRenderer({ 
-                    antialias: true,
-                    preserveDrawingBuffer: true,
-                    alpha: true,
-                    failIfMajorPerformanceCaveat: false
-                });
-                renderer.setSize(width, height);
-                renderer.shadowMap.enabled = true;
-                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-                container.appendChild(renderer.domElement);
-            } catch (err) {
-                console.warn('render3DRack: WebGLRenderer falhou, fallback 2D para rack', rack.id, err);
-                _webglAvailableCache = false; // marcar indisponível para os próximos racks
-                const dataUrl = render2DRackFallback(rack, container);
-                rack3DRegistry[rack.id] = { type: '2d', dataUrl, rack };
-                showFallbackNotice();
-                return;
-            }
+            const renderer = new THREE.WebGLRenderer({ 
+                antialias: true,
+                preserveDrawingBuffer: true,
+                alpha: true
+            });
+            renderer.setPixelRatio(window.devicePixelRatio || 1);
+            renderer.setSize(width, height, true);  // updateStyle=true
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
             
-            // Registar para uso pelo PDF
-            rack3DRegistry[rack.id] = { renderer, scene, camera, rack };
+            // Registar para uso pelo PDF — flag "disposed" controla se o animate continua
+            const entry = { renderer, scene, camera, rack, disposed: false, animationId: null };
+            rack3DRegistry[rack.id] = entry;
             
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
             scene.add(ambientLight);
@@ -2854,9 +2705,23 @@
             
             updateCameraPosition();
             
-            function animate() {
-                requestAnimationFrame(animate);
+            // Forçar 2 renders síncronos imediatos para garantir que o canvas
+            // não fica preto em browsers que demoram a iniciar o WebGL.
+            try {
                 renderer.render(scene, camera);
+                renderer.render(scene, camera);
+            } catch (e) { /* ignore */ }
+            
+            function animate() {
+                // Parar se foi descartado (evita render em renderer disposed)
+                if (entry.disposed) return;
+                entry.animationId = requestAnimationFrame(animate);
+                try {
+                    renderer.render(scene, camera);
+                } catch (e) {
+                    // Contexto perdido — parar loop
+                    entry.disposed = true;
+                }
             }
             animate();
         }
@@ -2866,8 +2731,6 @@
         async function captureRack3DAt(rackId, targetWidth, targetHeight) {
             const entry = rack3DRegistry[rackId];
             if (!entry) return null;
-            // Fallback 2D: a imagem já foi gerada e guardada como data-URL
-            if (entry.type === '2d') return entry.dataUrl;
             const { scene, camera: origCamera } = entry;
             
             // Em vez de mexer no renderer existente, criamos um renderer offscreen

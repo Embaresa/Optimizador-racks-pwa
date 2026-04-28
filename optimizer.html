@@ -666,7 +666,7 @@
 <a href="index.html" class="pwa-home-btn" title="Voltar ao menu">← Menu</a>
     <div class="container">
         <div class="header">
-            <h1>🗂️ Otimizador de Racks <span id="versionBadge" style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v50</span></h1>
+            <h1>🗂️ Otimizador de Racks <span id="versionBadge" style="font-size:0.35em; vertical-align:middle; padding:4px 8px; background:rgba(255,255,255,0.2); border-radius:6px; font-weight:500;">v52</span></h1>
             <p>Sistema Inteligente de Organização de Material</p>
         </div>
         
@@ -1786,12 +1786,15 @@
                 `;
                 
                 container.appendChild(div);
-                
-                // Esperar 2 frames de animação antes de renderizar 3D
-                // (garante que o layout CSS já calculou as dimensões finais do container)
+            });
+            
+            // Renderizar 3D de TODOS os racks em sequência (não em paralelo!)
+            // Criar muitos contextos WebGL ao mesmo tempo causa "Error creating WebGL context".
+            // Espaçando por 60ms damos tempo ao browser para libertar GC.
+            requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
-                    requestAnimationFrame(() => {
-                        render3DRack(rack);
+                    racks.forEach((rack, idx) => {
+                        setTimeout(() => render3DRack(rack), idx * 60);
                     });
                 });
             });
@@ -2399,16 +2402,34 @@
             camera.position.set(centerX + 1800, centerY + 1200, centerZ + 1800);
             camera.lookAt(centerX, centerY, centerZ);
             
-            const renderer = new THREE.WebGLRenderer({ 
-                antialias: true,
-                preserveDrawingBuffer: true,
-                alpha: true
-            });
-            renderer.setPixelRatio(window.devicePixelRatio || 1);
-            renderer.setSize(width, height, true);  // updateStyle=true
-            renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-            container.appendChild(renderer.domElement);
+            let renderer;
+            try {
+                renderer = new THREE.WebGLRenderer({ 
+                    antialias: true,
+                    preserveDrawingBuffer: true,
+                    alpha: true,
+                    failIfMajorPerformanceCaveat: false  // aceita renderer mesmo lento
+                });
+                renderer.setPixelRatio(window.devicePixelRatio || 1);
+                renderer.setSize(width, height, true);
+                renderer.shadowMap.enabled = true;
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                container.appendChild(renderer.domElement);
+            } catch (err) {
+                // WebGL bloqueado pelo browser (Edge tracking prevention, hardware issue, etc.)
+                console.warn('WebGL não disponível para Rack #' + rack.id, err);
+                container.innerHTML = `
+                    <div style="display:flex; align-items:center; justify-content:center; height:100%; padding:20px; text-align:center; color:#94a3b8; background:#1e293b; border-radius:8px;">
+                        <div>
+                            <div style="font-size:2em; margin-bottom:8px;">⚠️</div>
+                            <div style="font-weight:700; color:#fef3c7; margin-bottom:4px;">Vista 3D indisponível</div>
+                            <div style="font-size:0.85em;">O browser bloqueou WebGL.<br>Os dados estão corretos — verifique a tabela abaixo.</div>
+                            <div style="font-size:0.75em; margin-top:8px; opacity:0.7;">Sugestão: desative "Tracking Prevention" para este site<br>(Edge → Definições → Privacidade → Equilibrada)</div>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
             
             // Registar para uso pelo PDF — flag "disposed" controla se o animate continua
             const entry = { renderer, scene, camera, rack, disposed: false, animationId: null };

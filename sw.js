@@ -1,7 +1,7 @@
 // Service Worker — cache offline-first
 // Incrementar CACHE_VERSION sempre que alterar qualquer ficheiro estático
 
-const CACHE_VERSION = 'v50';
+const CACHE_VERSION = 'v52';
 const CACHE_NAME = `racks-pwa-${CACHE_VERSION}`;
 
 // Ficheiros locais a pré-cachear
